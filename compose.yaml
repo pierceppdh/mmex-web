@@ -1,0 +1,25 @@
+# Dockhand Git stack (compose path: compose.yaml)
+#
+# Host port is hardcoded 9090. Do not use ${MMEX_WEB_PORT}: Dockhand injects a
+# leading space and Docker then fails with invalid port specification.
+
+services:
+  mmex-web:
+    container_name: mmex-web
+    build: .
+    image: mmex-web:latest
+    restart: unless-stopped
+    ports:
+      - "9090:8080"
+    environment:
+      MMEX_DATA_DIR: /data
+      MMEX_DB_PATH: /data/data.mmb
+      MMEX_LOCK_HOLDER: mmex-web
+      STATIC_DIR: /app/static
+    volumes:
+      - /data/mmex-web:/data
+    dns:
+      - "192.168.0.25"
+    labels:
+      - "dockhand.url=http://omv.home:9090"
+      - "dockhand.update=false"

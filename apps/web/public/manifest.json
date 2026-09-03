@@ -1,0 +1,8 @@
+{
+  "name": "MMEX Web",
+  "short_name": "MMEX",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#10141c",
+  "theme_color": "#10141c"
+}

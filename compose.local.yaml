@@ -1,0 +1,12 @@
+# Laptop overlay: docker compose -f compose.yaml -f compose.local.yaml up --build
+#
+# Rootless Podman maps container uid 1000 to a subuid that cannot write ./data.
+# Run as container root (host user) locally. On OMV (rootful Docker) keep
+# compose.yaml as-is and `chown -R 1000:1000 /data/mmex-web`.
+services:
+  mmex-web:
+    user: "0:0"
+    volumes:
+      - ./data:/data
+    dns: []
+    labels: []
