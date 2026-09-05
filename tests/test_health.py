@@ -32,7 +32,7 @@ def test_health_ok_with_fixture_db(tmp_path: Path) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["version"] == "1.14.1"
+    assert body["version"] == "1.14.2"
     assert body["paperless"]["configured"] is False
     assert body["db"]["exists"] is True
     assert body["db"]["info_table"]["DATAVERSION"] == "3"

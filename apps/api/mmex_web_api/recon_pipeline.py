@@ -14,7 +14,7 @@ from sqlalchemy.engine import Engine
 
 from mmex_domain.recon import list_account_refs
 from mmex_domain.recon_commit import apply_operations
-from mmex_recon.matcher import load_candidates, match_all
+from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all
 from mmex_recon.parsers.registry import registry
 from mmex_recon.schemas import MatchStatus, ParsedStatement, ReconciliationSession, TransactionMatch
 from mmex_web_api.config import Settings
@@ -67,8 +67,8 @@ def build_session(
             paperless_doc_id=paperless_id,
         )
         return {"id": uuid4().hex, **session.model_dump(mode="json")}
-    start = min(t.date for t in txs) - timedelta(days=3)
-    end = max(t.date for t in txs) + timedelta(days=3)
+    start = min(t.date for t in txs) - timedelta(days=TOLERANCE_DAYS)
+    end = max(t.date for t in txs) + timedelta(days=TOLERANCE_DAYS)
     mmex = load_candidates(engine, account_id, start, end)
     matches = match_all(txs, mmex, credit_card=_credit_card(engine, account_id))
     session = ReconciliationSession(

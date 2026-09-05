@@ -5,8 +5,8 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine, text
 
-from mmex_recon.matcher import load_candidates, match_all
-from mmex_recon.schemas import BankTransaction, MatchStatus
+from mmex_recon.matcher import load_candidates, match_all, match_transaction
+from mmex_recon.schemas import BankTransaction, MatchStatus, MmexTransaction
 from mmex_web_api.recon_pipeline import commit_session
 from tests.conftest import make_mmex_db
 from tests.test_balances import _insert_account, _insert_txn
@@ -32,6 +32,84 @@ def test_fuzzy_auto_match(tmp_path) -> None:
     assert matches[0].status == MatchStatus.AUTO_MATCHED
     assert matches[0].selected_trans_id == 10
     engine.dispose()
+
+
+def test_amount_mismatch_still_lists_candidate() -> None:
+    mmex = [
+        MmexTransaction(
+            trans_id=1,
+            account_id=1,
+            payee_name="NETFLIX.COM",
+            trans_code="Withdrawal",
+            amount=Decimal("-15.25"),
+            status="",
+            trans_date=date(2026, 5, 2),
+        )
+    ]
+    bank = BankTransaction(
+        date=date(2026, 5, 2),
+        description="NETFLIX.COM subscription",
+        amount=Decimal("-15.27"),
+    )
+    result = match_transaction(bank, mmex)
+    assert result.status == MatchStatus.AMOUNT_MISMATCH
+    assert result.candidates
+    assert result.candidates[0].amount_match is False
+    assert result.include is False
+
+
+def test_inbound_transfer_uses_to_amount_and_source_name(tmp_path) -> None:
+    db = make_mmex_db(tmp_path / "data.mmb")
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Visa Cashback", "Credit Card", "0")
+        _insert_account(conn, 2, "Postfinance", "Checking", "0")
+        _insert_txn(
+            conn,
+            20,
+            2,
+            "Transfer",
+            "7629.70",
+            to_account_id=1,
+            to_amount="7629.70",
+        )
+    mmex = load_candidates(engine, 1, date(2026, 1, 1), date(2026, 1, 1))
+    assert len(mmex) == 1
+    assert mmex[0].is_inbound_transfer is True
+    assert mmex[0].amount == Decimal("7629.70")
+    assert mmex[0].counterpart_account_name == "Postfinance"
+    bank = BankTransaction(
+        date=date(2026, 1, 1),
+        description="PAIEMENT RECU",
+        amount=Decimal("7629.70"),
+    )
+    result = match_transaction(bank, mmex, credit_card=True)
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.selected_trans_id == 20
+    engine.dispose()
+
+
+def test_outbound_transfer_matches_counterpart_alias() -> None:
+    mmex = [
+        MmexTransaction(
+            trans_id=32,
+            account_id=32,
+            payee_name=None,
+            trans_code="Transfer",
+            amount=Decimal("-7629.70"),
+            status="",
+            trans_date=date(2025, 12, 18),
+            counterpart_account_name="Visa Cashback",
+        )
+    ]
+    bank = BankTransaction(
+        date=date(2025, 12, 18),
+        description="PAIEMENT SWISSCARD AECS",
+        amount=Decimal("-7629.70"),
+    )
+    result = match_transaction(bank, mmex)
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.selected_trans_id == 32
 
 
 def test_commit_insert_and_reconcile(authed_client, mmex_settings) -> None:
