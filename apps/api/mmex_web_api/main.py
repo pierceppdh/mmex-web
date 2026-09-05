@@ -35,8 +35,9 @@ from mmex_web_api.routes_settings import router as settings_router
 from mmex_web_api.routes_lock import router as lock_router
 from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
+from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.12.0"
+APP_VERSION = "1.13.0"
 
 
 class AppState:
@@ -133,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(settings_router)
     app.include_router(lock_router)
     app.include_router(quickadd_router)
+    app.include_router(recon_router)
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:

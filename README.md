@@ -4,7 +4,7 @@ Local-network web client for [Money Manager Ex](https://github.com/moneymanagere
 It opens the official `.mmb` SQLite ledger. It is **not** a remote desktop of the wxWidgets app
 and **not** the PHP capture WebApp.
 
-**Status:** PR 16 — mobile quick-add (writes the real `.mmb`) and optional ingest of the PHP WebApp sidecar so port **9080** can be retired.
+**Status:** PR 16 — mobile quick-add (writes the real `.mmb`) and optional ingest of the PHP WebApp sidecar so port **9080** can be retired. Réconciliation Paperless (`Nouveau-Relevé`) is listed in-app; matching/commit still requires the writer lock.
 
 First visit with no `AUTH_USERNAME`/`AUTH_PASSWORD` shows a local account bootstrap
 (stored as `data/auth.json`). Ledger APIs require the session cookie.
@@ -43,6 +43,8 @@ MMEX Web takes `data.mmb.lock` on start. Footer **Céder le verrou** / **Prendre
 ## Dockhand
 
 See [DEPLOY.md](DEPLOY.md). Stack `mmex-web`, port **9090**, data `/data/mmex-web`.
+
+Optional Paperless (inbox tag `Nouveau-Relevé`): set `PAPERLESS_URL` and `PAPERLESS_TOKEN` on the Dockhand stack. Do not use Compose `${VAR}` interpolation (Dockhand leading-space trap).
 
 ### Phone / WebApp 9080
 

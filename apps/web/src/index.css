@@ -583,6 +583,16 @@ body {
   text-align: left;
 }
 
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: rgb(0 0 0 / 35%);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
 .drawer {
   position: fixed;
   top: 0;
@@ -1600,4 +1610,25 @@ h2 {
 
 body:has(.drawer) {
   overflow: hidden;
+}
+
+.nav-leaf-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0 0.35rem 0.25rem 1.35rem;
+}
+
+.nav-leaf-wrap > .nav-item {
+  padding-left: 0.35rem;
+}
+
+.nav-stmt {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.nav-stmt select {
+  width: 100%;
+  font-size: 0.78rem;
 }

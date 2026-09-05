@@ -172,6 +172,17 @@ export function Editor({ accountId, accounts, transId, t, pickAccount, onClose, 
     onSaved();
   }
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
   return (
     <form className="editor" onSubmit={onSubmit}>
       <header>

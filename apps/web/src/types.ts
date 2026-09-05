@@ -100,7 +100,26 @@ export type View =
   | { kind: "settings" }
   | { kind: "quickadd" }
   | { kind: "all" }
+  | { kind: "recon" }
+  | { kind: "reconDoc"; accountId: number; docId: number }
   | { kind: "soon"; id: string };
+
+export type ReconDoc = {
+  id: number;
+  title: string;
+  created: string;
+  original_file_name: string;
+  tags: string[];
+  account_id: number | null;
+};
+
+export type ReconInbox = {
+  configured: boolean;
+  inbox_tag: string;
+  documents: ReconDoc[];
+  by_account: Record<string, ReconDoc[]>;
+  unmapped: ReconDoc[];
+};
 
 export type Tag = { tag_id: number; name: string };
 

@@ -33,6 +33,16 @@ export const STRINGS = {
     assets: "Actifs",
     reports: "Rapports",
     tools: "Outils",
+    recon: "Réconciliation",
+    reconHint:
+      "Relevés Paperless tagués « Nouveau-Relevé ». Ouvrez un document pour lancer l’import et le rapprochement.",
+    reconEmpty: "Aucun relevé en attente.",
+    reconNotConfigured: "Paperless n’est pas configuré (PAPERLESS_URL / PAPERLESS_TOKEN).",
+    reconUnmapped: "Non rattachés à un compte",
+    reconOpen: "Ouvrir le rapprochement",
+    reconPickStatement: "Relevé en attente",
+    reconWizardHint:
+      "Import et matching s’exécutent dans MMEX Web. Le commit n’écrit le livre que si ce processus détient le verrou.",
     newTransaction: "Nouvelle opération",
     quickAdd: "Saisie rapide",
     quickAddHint: "Écrit dans le vrai livre. Idéal depuis le téléphone.",
@@ -334,6 +344,16 @@ export const STRINGS = {
     assets: "Assets",
     reports: "Reports",
     tools: "Tools",
+    recon: "Reconciliation",
+    reconHint:
+      "Paperless statements tagged “Nouveau-Relevé”. Open a document to import and match.",
+    reconEmpty: "No pending statements.",
+    reconNotConfigured: "Paperless is not configured (PAPERLESS_URL / PAPERLESS_TOKEN).",
+    reconUnmapped: "Not mapped to an account",
+    reconOpen: "Open reconciliation",
+    reconPickStatement: "Pending statement",
+    reconWizardHint:
+      "Import and matching run inside MMEX Web. Commit writes the ledger only while this process holds the lock.",
     newTransaction: "New transaction",
     quickAdd: "Quick add",
     quickAddHint: "Writes the real ledger. Built for the phone.",

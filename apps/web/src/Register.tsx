@@ -75,24 +75,8 @@ export function Register({
   const [tags, setTags] = useState<Tag[]>([]);
   const [views, setViews] = useState<SavedView[]>([]);
   const [viewId, setViewId] = useState<number | "">("");
-  const [stmt, setStmt] = useState({
-    statement_locked: false,
-    statement_date: "",
-    credit_limit: "",
-    minimum_payment: "",
-  });
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
   const [editorAccount, setEditorAccount] = useState(accountId);
-
-  useEffect(() => {
-    setStmt({
-      statement_locked: Boolean(account?.statement_locked),
-      statement_date: account?.statement_date?.slice(0, 10) ?? "",
-      credit_limit: account?.credit_limit && account.credit_limit !== "0" ? account.credit_limit : "",
-      minimum_payment:
-        account?.minimum_payment && account.minimum_payment !== "0" ? account.minimum_payment : "",
-    });
-  }, [account]);
 
   const load = useCallback(
     async (start: number, append: boolean, current: TxnFilter = filter) => {
@@ -201,22 +185,6 @@ export function Register({
     }
   }
 
-  async function saveStatement(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    try {
-      await api.put(`/api/accounts/${accountId}/statement`, {
-        statement_locked: stmt.statement_locked,
-        statement_date: stmt.statement_date || null,
-        credit_limit: stmt.credit_limit || "0",
-        minimum_payment: stmt.minimum_payment || "0",
-      });
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("saveError"));
-    }
-  }
-
   async function cycleStatus(id: number) {
     try {
       const updated = await api.post<TxnRow>(`/api/transactions/${id}/status`);
@@ -300,52 +268,10 @@ export function Register({
         </div>
       )}
 
-      {!allAccounts && (
-      <>
-      <form className="stmt-bar" onSubmit={saveStatement}>
-        <span className="k">{t("statement")}</span>
-        <label>
-          {t("statementDate")}
-          <input
-            type="date"
-            value={stmt.statement_date}
-            onChange={(e) => setStmt({ ...stmt, statement_date: e.target.value })}
-          />
-        </label>
-        <label className="chk">
-          <input
-            type="checkbox"
-            checked={stmt.statement_locked}
-            onChange={(e) => setStmt({ ...stmt, statement_locked: e.target.checked })}
-          />
-          {t("statementLock")}
-        </label>
-        <label>
-          {t("creditLimit")}
-          <input
-            inputMode="decimal"
-            value={stmt.credit_limit}
-            onChange={(e) => setStmt({ ...stmt, credit_limit: e.target.value })}
-          />
-        </label>
-        <label>
-          {t("minPayment")}
-          <input
-            inputMode="decimal"
-            value={stmt.minimum_payment}
-            onChange={(e) => setStmt({ ...stmt, minimum_payment: e.target.value })}
-          />
-        </label>
-        <button type="submit" className="ghost">
-          {t("saveStatement")}
-        </button>
-      </form>
-      {locked && (
+      {!allAccounts && locked && (
         <p className="k">
           {t("statementLock")} ≤ {account?.statement_date?.slice(0, 10)}
         </p>
-      )}
-      </>
       )}
       {!allAccounts && <CustomFields refType="Bank Account" refId={accountId} t={t} />}
 
@@ -613,6 +539,13 @@ export function Register({
         <button type="button" className="ghost" onClick={() => void load(offset, true)}>
           {t("loadMore")} ({offset}/{total})
         </button>
+      )}
+      {editing !== undefined && (
+        <div
+          className="drawer-backdrop"
+          role="presentation"
+          onClick={() => setEditing(undefined)}
+        />
       )}
       {editing !== undefined && (
         <div className="drawer">

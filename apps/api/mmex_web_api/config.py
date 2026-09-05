@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     session_max_age: int = 60 * 60 * 24 * 14
     locale_default: str = "fr"
     webapp_db_path: Path | None = None
+    paperless_url: str = ""
+    paperless_token: str = ""
+    paperless_inbox_tag: str = "Nouveau-Relevé"
 
     @property
     def db_path(self) -> Path:

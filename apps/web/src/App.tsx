@@ -11,6 +11,7 @@ import { Stocks } from "./Stocks";
 import { Assets } from "./Assets";
 import { Tools } from "./Tools";
 import { Settings } from "./Settings";
+import { Recon } from "./Recon";
 import { QuickAdd } from "./QuickAdd";
 import { AccountEditor } from "./AccountEditor";
 import { Palette, type PaletteCommand } from "./Palette";
@@ -19,7 +20,14 @@ import { visibleGroups } from "./groups";
 import { STRINGS, readLocale, writeLocale, type Locale, type MessageKey } from "./i18n";
 import { pathToView, viewToPath } from "./routes";
 import { applyTheme, readTheme, watchSystemTheme, writeTheme, type ThemePref } from "./theme";
-import type { AuthStatus, Dashboard as DashboardData, Health, ManagerId, View } from "./types";
+import type {
+  AuthStatus,
+  Dashboard as DashboardData,
+  Health,
+  ManagerId,
+  ReconInbox,
+  View,
+} from "./types";
 
 const MANAGERS: ManagerId[] = ["payees", "categories", "tags", "currencies", "fields"];
 const SOON = [] as const;
@@ -40,6 +48,7 @@ export default function App() {
   const [theme, setTheme] = useState<ThemePref>(() => readTheme());
   const [showClosed, setShowClosed] = useState(false);
   const [accountEdit, setAccountEdit] = useState<number | "new" | null>(null);
+  const [reconInbox, setReconInbox] = useState<ReconInbox | null>(null);
   const [openNav, setOpenNav] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem("mmex-nav-open");
@@ -118,6 +127,12 @@ export default function App() {
     ]);
     setHealth(h);
     setDash(d);
+    try {
+      const inbox = await api.get<ReconInbox>("/api/recon/inbox");
+      setReconInbox(inbox);
+    } catch {
+      setReconInbox(null);
+    }
     try {
       const prefs = await api.get<{
         theme: ThemePref;
@@ -226,6 +241,11 @@ export default function App() {
           if (view.kind === "account") setNewTxnNonce((n) => n + 1);
           else go({ kind: "quickadd" });
         },
+      },
+      {
+        id: "recon",
+        label: t("recon"),
+        run: () => go({ kind: "recon" }),
       },
       {
         id: "scheduled",
@@ -369,6 +389,11 @@ export default function App() {
           onToggle={() => toggleNav("favorites")}
           onOpenGroup={() => go({ kind: "favorites" })}
           onOpenAccount={(id) => go({ kind: "account", accountId: id })}
+          statements={reconInbox?.by_account}
+          t={t}
+          onOpenStatement={(accountId, docId) =>
+            go({ kind: "reconDoc", accountId, docId })
+          }
         />
         <div className="nav-label">{locale === "en" ? "Accounts" : "Comptes"}</div>
         {navGroups.map((g) => (
@@ -384,8 +409,22 @@ export default function App() {
             onToggle={() => toggleNav(g.account_type)}
             onOpenGroup={() => go({ kind: "type", accountType: g.account_type })}
             onOpenAccount={(id) => go({ kind: "account", accountId: id })}
+            statements={reconInbox?.by_account}
+            t={t}
+            onOpenStatement={(accountId, docId) =>
+              go({ kind: "reconDoc", accountId, docId })
+            }
           />
         ))}
+        <NavButton
+          active={view.kind === "recon" || view.kind === "reconDoc"}
+          onClick={() => go({ kind: "recon" })}
+        >
+          {t("recon")}
+          {reconInbox && reconInbox.documents.length > 0 ? (
+            <span className="count">{reconInbox.documents.length}</span>
+          ) : null}
+        </NavButton>
         <NavButton
           active={view.kind === "scheduled"}
           onClick={() => go({ kind: "scheduled" })}
@@ -547,6 +586,18 @@ export default function App() {
         {view.kind === "reports" && <Reports locale={locale} t={t} />}
         {view.kind === "stocks" && <Stocks t={t} onChanged={() => void loadLedger()} />}
         {view.kind === "assets" && <Assets t={t} />}
+        {(view.kind === "recon" || view.kind === "reconDoc") && dash && (
+          <Recon
+            t={t}
+            accounts={dash.accounts}
+            accountId={view.kind === "reconDoc" ? view.accountId : undefined}
+            docId={view.kind === "reconDoc" ? view.docId : undefined}
+            onOpen={(aid, docId) => {
+              if (aid) go({ kind: "reconDoc", accountId: aid, docId });
+              else go({ kind: "recon" });
+            }}
+          />
+        )}
         {view.kind === "tools" && dash && (
           <Tools accounts={dash.accounts} t={t} onChanged={() => void loadLedger()} />
         )}
@@ -669,6 +720,9 @@ function NavGroup({
   onToggle,
   onOpenGroup,
   onOpenAccount,
+  statements,
+  t,
+  onOpenStatement,
 }: {
   id: string;
   label: string;
@@ -680,6 +734,9 @@ function NavGroup({
   onToggle: () => void;
   onOpenGroup: () => void;
   onOpenAccount: (id: number) => void;
+  statements?: Record<string, { id: number; title: string; original_file_name: string }[]>;
+  t: (key: MessageKey) => string;
+  onOpenStatement: (accountId: number, docId: number) => void;
 }) {
   return (
     <div className="nav-tree">
@@ -699,16 +756,41 @@ function NavGroup({
         </NavButton>
       </div>
       {open &&
-        accounts.map((acc) => (
-          <button
-            key={acc.account_id}
-            type="button"
-            className={`nav-item nav-leaf${activeAccountId === acc.account_id ? " active" : ""}${acc.status === "Closed" ? " closed" : ""}`}
-            onClick={() => onOpenAccount(acc.account_id)}
-          >
-            {acc.name}
-          </button>
-        ))}
+        accounts.map((acc) => {
+          const docs = statements?.[String(acc.account_id)] ?? [];
+          return (
+            <div key={acc.account_id} className="nav-leaf-wrap">
+              <button
+                type="button"
+                className={`nav-item nav-leaf${activeAccountId === acc.account_id ? " active" : ""}${acc.status === "Closed" ? " closed" : ""}`}
+                onClick={() => onOpenAccount(acc.account_id)}
+              >
+                {acc.name}
+                {docs.length > 0 ? <span className="count">{docs.length}</span> : null}
+              </button>
+              {docs.length > 0 && (
+                <label className="nav-stmt">
+                  {t("reconPickStatement")}
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      const id = Number(e.target.value);
+                      if (id) onOpenStatement(acc.account_id, id);
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="">{t("reconPickStatement")}</option>
+                    {docs.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.title || doc.original_file_name || `#${doc.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          );
+        })}
     </div>
   );
 }

@@ -82,6 +82,17 @@ export function AccountEditor({ accountId, t, onClose, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  useEffect(() => {
     setError(null);
     void api.get<{ currencies: Currency[] }>("/api/currencies").then((c) => {
       setCurrencies(c.currencies);
@@ -278,22 +289,6 @@ export function AccountEditor({ accountId, t, onClose, onSaved }: Props) {
             value={form.minimum_balance}
             onChange={(e) => setForm({ ...form, minimum_balance: e.target.value })}
           />
-        </label>
-        <label>
-          {t("statementDate")}
-          <input
-            type="date"
-            value={form.statement_date}
-            onChange={(e) => setForm({ ...form, statement_date: e.target.value })}
-          />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={Boolean(form.statement_locked)}
-            onChange={(e) => setForm({ ...form, statement_locked: e.target.checked ? 1 : 0 })}
-          />
-          {t("statementLock")}
         </label>
       </div>
       <footer className="editor-actions">
