@@ -93,7 +93,11 @@ class MatchPatch(BaseModel):
     force_new_insert: bool | None = None
     insert_as_transfer: bool | None = None
     transfer_counterpart_account_id: int | None = None
+    transfer_counterpart_account_name: str | None = None
+    transfer_counterpart_amount: str | None = None
     force_trans_code: str | None = None
+    category_id: int | None = None
+    category_name: str | None = None
     status: str | None = None
 
 
@@ -151,10 +155,19 @@ def patch_match(
         raise HTTPException(status_code=404, detail="match not found")
     row = dict(matches[index])
     data = body.model_dump(exclude_unset=True)
+    nullable = {
+        "selected_trans_id",
+        "transfer_counterpart_account_id",
+        "transfer_counterpart_amount",
+        "force_trans_code",
+        "category_id",
+        "category_name",
+    }
     if "selected_trans_id" in data and data["selected_trans_id"] is None:
         row["selected_trans_id"] = None
         row["force_new_insert"] = True
-    row.update({k: v for k, v in data.items() if v is not None or k == "selected_trans_id"})
+        row["status"] = "MANUAL"
+    row.update({k: v for k, v in data.items() if v is not None or k in nullable})
     matches[index] = row
     session["matches"] = matches
     return session

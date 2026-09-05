@@ -83,6 +83,45 @@ def test_commit_insert_and_reconcile(authed_client, mmex_settings) -> None:
     assert live["reconciled"] == 2
 
 
+def test_patch_match_new_entry_fields(authed_client) -> None:
+    sid = "sess1"
+    authed_client.app.state.mmex.recon_sessions[sid] = {
+        "id": sid,
+        "account_id": 1,
+        "matches": [
+            {
+                "include": True,
+                "selected_trans_id": 11,
+                "selected_payee_name": "Coop",
+                "force_new_insert": False,
+                "insert_as_transfer": False,
+                "category_id": None,
+                "candidates": [],
+            }
+        ],
+    }
+    resp = authed_client.patch(
+        f"/api/recon/sessions/{sid}/matches/0",
+        json={
+            "selected_trans_id": None,
+            "selected_payee_name": "New shop",
+            "insert_as_transfer": True,
+            "transfer_counterpart_account_id": 2,
+            "transfer_counterpart_account_name": "Epargne",
+            "force_trans_code": "Withdrawal",
+            "category_id": 3,
+            "category_name": "Food",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    row = resp.json()["matches"][0]
+    assert row["selected_trans_id"] is None
+    assert row["insert_as_transfer"] is True
+    assert row["transfer_counterpart_account_name"] == "Epargne"
+    assert row["selected_payee_name"] == "New shop"
+    assert row["category_id"] == 3
+
+
 def test_create_session_parse_error(authed_client, monkeypatch) -> None:
     from mmex_web_api import routes_recon
 

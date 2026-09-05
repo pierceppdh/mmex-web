@@ -1654,3 +1654,58 @@ body:has(.drawer) {
   text-decoration: none;
   padding: 0.4rem 0.75rem;
 }
+
+.recon-review {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.9fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.recon-grid table tr {
+  cursor: pointer;
+}
+
+.recon-grid table tr.active {
+  outline: 1px solid var(--ok);
+}
+
+.recon-detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--bg);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.recon-detail h3,
+.recon-detail h4 {
+  margin: 0;
+}
+
+.recon-detail fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+}
+
+.recon-cands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.recon-cands li {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .recon-review {
+    grid-template-columns: 1fr;
+  }
+}

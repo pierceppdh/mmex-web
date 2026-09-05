@@ -1,7 +1,27 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { PayeeField } from "./PayeeField";
 import type { MessageKey } from "./i18n";
-import type { Account, ReconDoc, ReconInbox } from "./types";
+import type { Account, Category, ReconDoc, ReconInbox } from "./types";
+
+type MmexTxn = {
+  trans_id: number;
+  payee_name: string | null;
+  amount: string;
+  trans_date: string;
+  trans_code: string;
+  notes: string;
+  is_inbound_transfer: boolean;
+  counterpart_account_name: string | null;
+  category_name: string | null;
+};
+
+type Candidate = {
+  score: number;
+  amount_match: boolean;
+  date_delta_days: number;
+  mmex_transaction: MmexTxn;
+};
 
 type MatchRow = {
   bank_transaction: { date: string; description: string; amount: string };
@@ -9,23 +29,22 @@ type MatchRow = {
   include: boolean;
   selected_trans_id: number | null;
   selected_payee_name: string | null;
-  candidates: {
-    score: number;
-    amount_match: boolean;
-    mmex_transaction: {
-      trans_id: number;
-      payee_name: string | null;
-      amount: string;
-      trans_date: string;
-    };
-  }[];
+  force_new_insert: boolean;
+  insert_as_transfer: boolean;
+  transfer_counterpart_account_id: number | null;
+  transfer_counterpart_account_name: string | null;
+  transfer_counterpart_amount: string | null;
+  force_trans_code: string | null;
+  category_id: number | null;
+  category_name: string | null;
+  candidates: Candidate[];
 };
 
 type ReconSession = {
   id: string;
   account_id: number;
   account_name: string;
-  statement: { bank_name: string; parser_id: string; transactions: unknown[] };
+  statement: { bank_name: string; parser_id: string; currency?: string };
   matches: MatchRow[];
   committed?: boolean;
 };
@@ -44,6 +63,29 @@ function docLabel(doc: ReconDoc): string {
   return doc.title || doc.original_file_name || `#${doc.id}`;
 }
 
+function mmexLabel(tx: MmexTxn, t: (key: MessageKey) => string): string {
+  const date = tx.trans_date.slice(0, 10);
+  const amt = tx.amount;
+  if (tx.trans_code === "Transfer" || tx.is_inbound_transfer) {
+    const other = tx.counterpart_account_name || tx.payee_name || "—";
+    const arrow = tx.is_inbound_transfer ? t("reconInbound") : t("reconOutbound");
+    return `${date} · ${arrow} ${other} · ${amt}`;
+  }
+  return `${date} · ${tx.payee_name || "—"} · ${amt}`;
+}
+
+function candidateLabel(c: Candidate, t: (key: MessageKey) => string): string {
+  return `${mmexLabel(c.mmex_transaction, t)} · ${t("reconDelta")}${c.date_delta_days}`;
+}
+
+function linkedTxn(row: MatchRow): MmexTxn | null {
+  if (!row.selected_trans_id) return null;
+  return (
+    row.candidates.find((c) => c.mmex_transaction.trans_id === row.selected_trans_id)
+      ?.mmex_transaction ?? null
+  );
+}
+
 export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitted }: Props) {
   const [inbox, setInbox] = useState<ReconInbox | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,16 +93,20 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const [session, setSession] = useState<ReconSession | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     void api
       .get<ReconInbox>("/api/recon/inbox")
       .then(setInbox)
       .catch((err: Error) => setError(err.message));
+    void api.get<{ categories: Category[] }>("/api/categories").then((r) => setCategories(r.categories));
   }, []);
 
   const nameById = Object.fromEntries(accounts.map((a) => [a.account_id, a.name]));
   const selected = docId != null ? inbox?.documents.find((d) => d.id === docId) : undefined;
+  const openAccounts = accounts.filter((a) => a.status !== "Closed");
 
   useEffect(() => {
     if (selected?.account_id) setPickedAccount(selected.account_id);
@@ -76,12 +122,15 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     setBusy(true);
     setError(null);
     setResult(null);
+    setSelectedIdx(null);
     try {
       const created = await api.post<ReconSession>("/api/recon/sessions", {
         paperless_id: selected.id,
         account_id: pickedAccount,
       });
       setSession(created);
+      const firstTodo = created.matches.findIndex((m) => !m.selected_trans_id);
+      setSelectedIdx(firstTodo >= 0 ? firstTodo : 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("saveError"));
     } finally {
@@ -120,6 +169,8 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     }
   }
 
+  const row = session && selectedIdx != null ? session.matches[selectedIdx] : undefined;
+
   if (docId != null) {
     return (
       <section className="panel recon-wizard">
@@ -145,13 +196,11 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                 onChange={(e) => setPickedAccount(Number(e.target.value))}
               >
                 <option value="">{t("reconUnmapped")}</option>
-                {accounts
-                  .filter((a) => a.status !== "Closed")
-                  .map((a) => (
-                    <option key={a.account_id} value={a.account_id}>
-                      {a.name}
-                    </option>
-                  ))}
+                {openAccounts.map((a) => (
+                  <option key={a.account_id} value={a.account_id}>
+                    {a.name}
+                  </option>
+                ))}
               </select>
             </label>
             <p>
@@ -172,62 +221,271 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
         {session && (
           <>
             <p className="k">
-              {session.statement.bank_name} · {session.matches.length} {t("matching")}
+              {session.statement.bank_name} — {session.account_name} · {session.matches.length}{" "}
+              {t("matching")}
             </p>
-            <div className="table-wrap">
-              <table className="register">
-                <thead>
-                  <tr>
-                    <th>{t("reconInclude")}</th>
-                    <th>{t("date")}</th>
-                    <th>{t("reconBankLine")}</th>
-                    <th>{t("amount")}</th>
-                    <th>{t("reconMatch")}</th>
-                    <th>{t("reconMmex")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {session.matches.map((row, idx) => (
-                    <tr key={idx}>
-                      <td>
+            <div className="recon-review">
+              <div className="table-wrap recon-grid">
+                <table className="register">
+                  <thead>
+                    <tr>
+                      <th>{t("reconInclude")}</th>
+                      <th>{t("date")}</th>
+                      <th>{t("reconBankLine")}</th>
+                      <th>{t("amount")}</th>
+                      <th>{t("reconMatch")}</th>
+                      <th>{t("reconMmex")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {session.matches.map((m, idx) => {
+                      const linked = linkedTxn(m);
+                      return (
+                        <tr
+                          key={idx}
+                          className={idx === selectedIdx ? "active" : undefined}
+                          onClick={() => setSelectedIdx(idx)}
+                        >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={m.include}
+                              onChange={(e) => void patchRow(idx, { include: e.target.checked })}
+                            />
+                          </td>
+                          <td>{m.bank_transaction.date}</td>
+                          <td>{m.bank_transaction.description}</td>
+                          <td className="num">{m.bank_transaction.amount}</td>
+                          <td>{m.status}</td>
+                          <td>
+                            {linked
+                              ? mmexLabel(linked, t)
+                              : m.insert_as_transfer
+                                ? `${t("reconOutbound")} ${m.transfer_counterpart_account_name || "—"}`
+                                : m.selected_payee_name || t("reconNewInsert")}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <aside className="recon-detail">
+                {!row && <p className="k">{t("reconSelectRow")}</p>}
+                {row && selectedIdx != null && (
+                  <article>
+                    <h3>
+                      {t("reconEditLine")} {selectedIdx + 1}
+                    </h3>
+                    <p>
+                      <strong>{row.bank_transaction.date}</strong> {row.bank_transaction.description}{" "}
+                      <span className="num">({row.bank_transaction.amount})</span>
+                    </p>
+                    <p className="k">{row.status}</p>
+                    {row.selected_trans_id && (
+                      <p>
+                        {t("reconLinked")}
+                        {linkedTxn(row) ? ` — ${mmexLabel(linkedTxn(row)!, t)}` : ` #${row.selected_trans_id}`}
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            void patchRow(selectedIdx, {
+                              selected_trans_id: null,
+                              force_new_insert: true,
+                              status: "MANUAL",
+                            })
+                          }
+                        >
+                          {t("reconUnlink")}
+                        </button>
+                      </p>
+                    )}
+                    <label className="chk">
+                      <input
+                        type="checkbox"
+                        checked={row.include}
+                        onChange={(e) => void patchRow(selectedIdx, { include: e.target.checked })}
+                      />
+                      {t("reconInclude")}
+                    </label>
+                    {!row.selected_trans_id && row.status === "FUZZY_MATCHED" && (
+                      <label className="chk">
                         <input
                           type="checkbox"
-                          checked={row.include}
+                          checked={row.force_new_insert}
                           onChange={(e) =>
-                            void patchRow(idx, { include: e.target.checked })
+                            void patchRow(selectedIdx, { force_new_insert: e.target.checked, status: "MANUAL" })
                           }
                         />
-                      </td>
-                      <td>{row.bank_transaction.date}</td>
-                      <td>{row.bank_transaction.description}</td>
-                      <td className="num">{row.bank_transaction.amount}</td>
-                      <td>{row.status}</td>
-                      <td>
+                        {t("reconForceNew")}
+                      </label>
+                    )}
+                    <fieldset>
+                      <legend>{t("reconInsertType")}</legend>
+                      <label className="chk">
+                        <input
+                          type="radio"
+                          name={`insert-${selectedIdx}`}
+                          checked={!row.insert_as_transfer}
+                          onChange={() =>
+                            void patchRow(selectedIdx, {
+                              insert_as_transfer: false,
+                              selected_trans_id: null,
+                              force_new_insert: true,
+                              status: "MANUAL",
+                            })
+                          }
+                        />
+                        {t("reconTxn")}
+                      </label>
+                      <label className="chk">
+                        <input
+                          type="radio"
+                          name={`insert-${selectedIdx}`}
+                          checked={row.insert_as_transfer}
+                          onChange={() =>
+                            void patchRow(selectedIdx, {
+                              insert_as_transfer: true,
+                              selected_trans_id: null,
+                              force_new_insert: true,
+                              status: "MANUAL",
+                            })
+                          }
+                        />
+                        {t("reconTransfer")}
+                      </label>
+                    </fieldset>
+                    {row.insert_as_transfer && !row.selected_trans_id && (
+                      <>
+                        <label>
+                          {t("reconCounterpart")}
+                          <select
+                            value={row.transfer_counterpart_account_id ?? ""}
+                            onChange={(e) => {
+                              const id = Number(e.target.value) || null;
+                              const acc = openAccounts.find((a) => a.account_id === id);
+                              void patchRow(selectedIdx, {
+                                transfer_counterpart_account_id: id,
+                                transfer_counterpart_account_name: acc?.name ?? null,
+                                insert_as_transfer: true,
+                                status: "MANUAL",
+                              });
+                            }}
+                          >
+                            <option value="">—</option>
+                            {openAccounts
+                              .filter((a) => a.account_id !== session.account_id)
+                              .map((a) => (
+                                <option key={a.account_id} value={a.account_id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label>
+                          {t("reconCounterpartAmount")}
+                          <input
+                            inputMode="decimal"
+                            value={row.transfer_counterpart_amount ?? ""}
+                            onChange={(e) =>
+                              void patchRow(selectedIdx, {
+                                transfer_counterpart_amount: e.target.value || null,
+                              })
+                            }
+                          />
+                        </label>
+                      </>
+                    )}
+                    {!row.insert_as_transfer && !row.selected_trans_id && (
+                      <>
+                        <PayeeField
+                          value={row.selected_payee_name ?? ""}
+                          payeeId={0}
+                          t={t}
+                          onChange={(query) =>
+                            void patchRow(selectedIdx, {
+                              selected_payee_name: query,
+                              force_new_insert: true,
+                              status: "MANUAL",
+                            })
+                          }
+                        />
+                        <label>
+                          {t("reconTransCode")}
+                          <select
+                            value={row.force_trans_code || ""}
+                            onChange={(e) =>
+                              void patchRow(selectedIdx, {
+                                force_trans_code: e.target.value || null,
+                                status: "MANUAL",
+                              })
+                            }
+                          >
+                            <option value="">{t("reconCodeAuto")}</option>
+                            <option value="Withdrawal">{t("reconCodeWithdraw")}</option>
+                            <option value="Deposit">{t("reconCodeDeposit")}</option>
+                          </select>
+                        </label>
+                      </>
+                    )}
+                    {!row.selected_trans_id && (
+                      <label>
+                        {t("category")}
                         <select
-                          value={row.selected_trans_id ?? ""}
+                          value={row.category_id ?? ""}
                           onChange={(e) => {
-                            const v = e.target.value;
-                            void patchRow(
-                              idx,
-                              v
-                                ? { selected_trans_id: Number(v), force_new_insert: false }
-                                : { selected_trans_id: null, force_new_insert: true },
-                            );
+                            const id = Number(e.target.value) || null;
+                            const cat = categories.find((c) => c.categ_id === id);
+                            void patchRow(selectedIdx, {
+                              category_id: id,
+                              category_name: cat?.path ?? null,
+                              status: "MANUAL",
+                            });
                           }}
                         >
-                          <option value="">{t("reconNewInsert")}</option>
-                          {row.candidates.map((c) => (
-                            <option key={c.mmex_transaction.trans_id} value={c.mmex_transaction.trans_id}>
-                              #{c.mmex_transaction.trans_id} {c.mmex_transaction.payee_name ?? ""}{" "}
-                              {c.mmex_transaction.amount}
+                          <option value="">—</option>
+                          {categories.map((c) => (
+                            <option key={c.categ_id} value={c.categ_id}>
+                              {c.path}
                             </option>
                           ))}
                         </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </label>
+                    )}
+                    {row.candidates.length > 0 && (
+                      <div>
+                        <h4>{t("reconCandidates")}</h4>
+                        <ul className="recon-cands">
+                          {row.candidates.map((c) => (
+                            <li key={c.mmex_transaction.trans_id}>
+                              <span>
+                                {candidateLabel(c, t)}
+                                {c.amount_match ? " · =" : ""}
+                              </span>
+                              <button
+                                type="button"
+                                className="ghost"
+                                onClick={() =>
+                                  void patchRow(selectedIdx, {
+                                    selected_trans_id: c.mmex_transaction.trans_id,
+                                    selected_payee_name: c.mmex_transaction.payee_name,
+                                    force_new_insert: false,
+                                    insert_as_transfer: false,
+                                    status: "MANUAL",
+                                  })
+                                }
+                              >
+                                {t("reconLink")}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </article>
+                )}
+              </aside>
             </div>
             <p className="editor-actions">
               <button type="button" className="ghost" disabled={busy} onClick={() => void doCommit(true)}>
@@ -267,9 +525,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
               <tr key={doc.id}>
                 <td>{doc.created}</td>
                 <td>{docLabel(doc)}</td>
-                <td>
-                  {doc.account_id ? nameById[doc.account_id] ?? "—" : t("reconUnmapped")}
-                </td>
+                <td>{doc.account_id ? nameById[doc.account_id] ?? "—" : t("reconUnmapped")}</td>
                 <td>
                   <button type="button" onClick={() => onOpen(doc.id)}>
                     {t("reconOpen")}
