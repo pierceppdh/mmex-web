@@ -391,9 +391,7 @@ export default function App() {
           onOpenAccount={(id) => go({ kind: "account", accountId: id })}
           statements={reconInbox?.by_account}
           t={t}
-          onOpenStatement={(accountId, docId) =>
-            go({ kind: "reconDoc", accountId, docId })
-          }
+          onOpenStatement={(_accountId, docId) => go({ kind: "reconDoc", docId })}
         />
         <div className="nav-label">{locale === "en" ? "Accounts" : "Comptes"}</div>
         {navGroups.map((g) => (
@@ -411,9 +409,7 @@ export default function App() {
             onOpenAccount={(id) => go({ kind: "account", accountId: id })}
             statements={reconInbox?.by_account}
             t={t}
-            onOpenStatement={(accountId, docId) =>
-              go({ kind: "reconDoc", accountId, docId })
-            }
+            onOpenStatement={(_accountId, docId) => go({ kind: "reconDoc", docId })}
           />
         ))}
         <NavButton
@@ -592,10 +588,8 @@ export default function App() {
             accounts={dash.accounts}
             accountId={view.kind === "reconDoc" ? view.accountId : undefined}
             docId={view.kind === "reconDoc" ? view.docId : undefined}
-            onOpen={(aid, docId) => {
-              if (aid) go({ kind: "reconDoc", accountId: aid, docId });
-              else go({ kind: "recon" });
-            }}
+            onOpen={(docId) => go({ kind: "reconDoc", docId })}
+            onBack={() => go({ kind: "recon" })}
           />
         )}
         {view.kind === "tools" && dash && (

@@ -78,3 +78,8 @@ def test_recon_inbox_maps_docs(authed_client, mmex_settings, monkeypatch) -> Non
     assert body["configured"] is True
     assert body["documents"][0]["account_id"] == 1
     assert "1" in body["by_account"]
+
+
+def test_recon_pdf_unconfigured(authed_client) -> None:
+    resp = authed_client.get("/api/recon/documents/1/file")
+    assert resp.status_code == 502

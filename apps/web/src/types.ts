@@ -106,7 +106,7 @@ export type View =
   | { kind: "quickadd" }
   | { kind: "all" }
   | { kind: "recon" }
-  | { kind: "reconDoc"; accountId: number; docId: number }
+  | { kind: "reconDoc"; docId: number; accountId?: number }
   | { kind: "soon"; id: string };
 
 export type ReconDoc = {

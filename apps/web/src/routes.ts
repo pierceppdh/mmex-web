@@ -16,6 +16,8 @@ export function pathToView(pathname: string): View {
   if (p === "/tools") return { kind: "tools" };
   if (p === "/settings") return { kind: "settings" };
   if (p === "/recon") return { kind: "recon" };
+  const reconDoc = /^\/recon\/(\d+)$/.exec(p);
+  if (reconDoc) return { kind: "reconDoc", docId: Number(reconDoc[1]) };
   const reconAcc = /^\/account\/(\d+)\/recon\/(\d+)$/.exec(p);
   if (reconAcc) {
     return {
@@ -62,7 +64,7 @@ export function viewToPath(view: View): string {
     case "recon":
       return "/recon";
     case "reconDoc":
-      return `/account/${view.accountId}/recon/${view.docId}`;
+      return `/recon/${view.docId}`;
     case "account":
       return `/account/${view.accountId}`;
     case "type":

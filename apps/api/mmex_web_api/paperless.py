@@ -68,3 +68,26 @@ def list_inbox_documents(settings: Settings) -> list[dict[str, Any]]:
             )
         url = payload.get("next")
     return docs
+
+
+def download_document(settings: Settings, doc_id: int) -> tuple[bytes, str]:
+    base = (settings.paperless_url or "").rstrip("/")
+    token = settings.paperless_token or ""
+    if not base or not token:
+        raise PaperlessError("Paperless is not configured")
+    url = f"{base}/api/documents/{int(doc_id)}/download/"
+    req = urllib.request.Request(url, headers={"Authorization": f"Token {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read()
+            ctype = resp.headers.get("Content-Type") or "application/pdf"
+            disp = resp.headers.get("Content-Disposition") or ""
+    except urllib.error.HTTPError as exc:
+        raise PaperlessError(f"Paperless HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise PaperlessError(str(exc.reason or exc)) from exc
+    name = f"paperless_{doc_id}.pdf"
+    marker = "filename="
+    if marker in disp:
+        name = disp.split(marker, 1)[1].strip().strip('"')
+    return data, name

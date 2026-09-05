@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.engine import Engine
 
 from mmex_domain.recon import list_account_refs, suggest_account_id
 from mmex_web_api.config import Settings
 from mmex_web_api.deps import get_compatible_engine, get_current_user, get_settings
-from mmex_web_api.paperless import PaperlessError, list_inbox_documents
+from mmex_web_api.paperless import PaperlessError, download_document, list_inbox_documents
 
 router = APIRouter(prefix="/api/recon", dependencies=[Depends(get_current_user)])
 
@@ -50,3 +51,17 @@ def inbox(
         "by_account": {str(k): v for k, v in by_account.items()},
         "unmapped": unmapped,
     }
+
+
+@router.get("/documents/{doc_id}/file")
+def document_file(
+    doc_id: int,
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    try:
+        data, name = download_document(settings, doc_id)
+    except PaperlessError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    headers = {"Content-Disposition": f'inline; filename="{name}"'}
+    media = "application/pdf" if name.lower().endswith(".pdf") else "application/octet-stream"
+    return Response(content=data, media_type=media, headers=headers)
