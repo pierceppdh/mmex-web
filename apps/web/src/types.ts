@@ -16,6 +16,11 @@ export type Health = {
     protocol?: string;
   };
   last_backup: { path: string; mtime_iso: string } | null;
+  paperless?: {
+    configured: boolean;
+    url: string | null;
+    inbox_tag: string;
+  };
 };
 
 export type Account = {

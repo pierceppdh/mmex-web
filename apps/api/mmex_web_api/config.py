@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,13 @@ class Settings(BaseSettings):
     paperless_url: str = ""
     paperless_token: str = ""
     paperless_inbox_tag: str = "Nouveau-Relevé"
+
+    @field_validator("paperless_url", "paperless_token", "paperless_inbox_tag", mode="before")
+    @classmethod
+    def _strip_env(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
     @property
     def db_path(self) -> Path:

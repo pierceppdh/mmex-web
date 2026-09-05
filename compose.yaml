@@ -16,6 +16,11 @@ services:
       MMEX_DB_PATH: /data/data.mmb
       MMEX_LOCK_HOLDER: mmex-web
       STATIC_DIR: /app/static
+      # Pass Dockhand stack env through. Empty default avoids a hard fail if unset.
+      # Strip in Settings: Dockhand has injected a leading space on interpolated values.
+      PAPERLESS_URL: ${PAPERLESS_URL:-}
+      PAPERLESS_TOKEN: ${PAPERLESS_TOKEN:-}
+      PAPERLESS_INBOX_TAG: ${PAPERLESS_INBOX_TAG:-Nouveau-Relevé}
     volumes:
       - /data/mmex-web:/data
     dns:

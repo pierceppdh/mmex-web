@@ -3,7 +3,16 @@ from __future__ import annotations
 from sqlalchemy import create_engine, text
 
 from mmex_domain.recon import suggest_account_id
+from mmex_web_api.config import Settings
 from mmex_web_api import routes_recon
+
+
+def test_paperless_env_strips_dockhand_space(monkeypatch) -> None:
+    monkeypatch.setenv("PAPERLESS_URL", " http://paperless.home:8000 ")
+    monkeypatch.setenv("PAPERLESS_TOKEN", " secret ")
+    s = Settings(_env_file=None)
+    assert s.paperless_url == "http://paperless.home:8000"
+    assert s.paperless_token == "secret"
 
 
 def test_suggest_account_iban() -> None:

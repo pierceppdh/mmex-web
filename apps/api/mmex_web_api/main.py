@@ -37,7 +37,7 @@ from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
 from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.13.0"
+APP_VERSION = "1.13.1"
 
 
 class AppState:
@@ -157,6 +157,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "schema": schema,
             "lock": lock,
             "last_backup": latest_backup(settings.backups_dir),
+            "paperless": {
+                "configured": bool(settings.paperless_url and settings.paperless_token),
+                "url": settings.paperless_url or None,
+                "inbox_tag": settings.paperless_inbox_tag,
+            },
         }
 
     @app.get("/api/info")

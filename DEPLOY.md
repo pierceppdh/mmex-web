@@ -30,7 +30,7 @@ sudo chown -R 1000:1000 /data/mmex-web
 Keep desktop MMEX closed (or read-only) while this stack holds the write lock.
 Yield the lock in the UI before a bank-reconciliation-app commit; take it back afterwards. Same file: `/data/mmex-web/data.mmb.lock`.
 
-Réconciliation inbox: add Dockhand env `PAPERLESS_URL` and `PAPERLESS_TOKEN` (tag `Nouveau-Relevé` by default). Matching/commit of PDF lines is not in this image yet; the menu lists pending statements mapped to accounts.
+Réconciliation inbox: add Dockhand env `PAPERLESS_URL` and `PAPERLESS_TOKEN` (tag `Nouveau-Relevé` by default). Those names must stay in `compose.yaml` `environment:` or the container never sees them. Matching/commit of PDF lines is not in this image yet; the menu lists pending statements mapped to accounts. Check `/api/health` → `paperless.configured`.
 
 Phone capture is **Saisie rapide** on 9090. After ingesting leftover `MMEX_New_Transaction.db` from Outils, stop Dockhand stack `webmmxapp` (9080). Optional: `WEBAPP_DB_PATH=/data/webmmxapp/MMEX_New_Transaction.db` if you bind-mount that volume read-only.
 
