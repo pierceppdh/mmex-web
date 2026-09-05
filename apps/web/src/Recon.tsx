@@ -44,6 +44,7 @@ type ReconSession = {
   id: string;
   account_id: number;
   account_name: string;
+  suggested_account_id?: number | null;
   statement: { bank_name: string; parser_id: string; currency?: string };
   matches: MatchRow[];
   committed?: boolean;
@@ -113,6 +114,16 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     else if (accountId) setPickedAccount(accountId);
   }, [selected?.account_id, accountId]);
 
+  useEffect(() => {
+    if (docId == null) return;
+    void api
+      .get<{ suggested_account_id: number | null }>(`/api/recon/documents/${docId}/preview`)
+      .then((p) => {
+        if (p.suggested_account_id) setPickedAccount(p.suggested_account_id);
+      })
+      .catch(() => undefined);
+  }, [docId]);
+
   async function runMatch() {
     if (!selected) return;
     if (!pickedAccount) {
@@ -129,6 +140,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
         account_id: pickedAccount,
       });
       setSession(created);
+      if (created.suggested_account_id) setPickedAccount(created.suggested_account_id);
       const firstTodo = created.matches.findIndex((m) => !m.selected_trans_id);
       setSelectedIdx(firstTodo >= 0 ? firstTodo : 0);
     } catch (err) {

@@ -24,7 +24,7 @@ from mmex_web_api.paperless import (
     list_inbox_documents,
     mark_reconciled,
 )
-from mmex_web_api.recon_pipeline import build_session, commit_session
+from mmex_web_api.recon_pipeline import build_session, commit_session, preview_document
 
 router = APIRouter(prefix="/api/recon", dependencies=[Depends(get_current_user)])
 
@@ -64,6 +64,20 @@ def inbox(
         "by_account": {str(k): v for k, v in by_account.items()},
         "unmapped": unmapped,
     }
+
+
+@router.get("/documents/{doc_id}/preview")
+def document_preview(
+    doc_id: int,
+    engine: Engine = Depends(get_compatible_engine),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    try:
+        return preview_document(engine, settings, doc_id)
+    except PaperlessError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/documents/{doc_id}/file")

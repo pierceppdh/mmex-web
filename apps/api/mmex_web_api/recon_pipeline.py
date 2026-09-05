@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from sqlalchemy.engine import Engine
 
-from mmex_domain.recon import list_account_refs
+from mmex_domain.recon import list_account_refs, match_statement_account
 from mmex_domain.recon_commit import apply_operations
 from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all
 from mmex_recon.parsers.registry import registry
@@ -57,6 +57,9 @@ def build_session(
     statement = parse_pdf_bytes(data, filename)
     if currency:
         statement = statement.with_currency(currency)
+    detected = match_statement_account(statement, list_account_refs(engine))
+    if detected:
+        account_id = int(detected["account_id"])
     txs = statement.transactions
     if not txs:
         session = ReconciliationSession(
@@ -66,7 +69,9 @@ def build_session(
             account_name=_account_name(engine, account_id),
             paperless_doc_id=paperless_id,
         )
-        return {"id": uuid4().hex, **session.model_dump(mode="json")}
+        payload = {"id": uuid4().hex, **session.model_dump(mode="json")}
+        payload["suggested_account_id"] = int(detected["account_id"]) if detected else None
+        return payload
     start = min(t.date for t in txs) - timedelta(days=TOLERANCE_DAYS)
     end = max(t.date for t in txs) + timedelta(days=TOLERANCE_DAYS)
     mmex = load_candidates(engine, account_id, start, end)
@@ -79,7 +84,31 @@ def build_session(
         matches=matches,
         paperless_doc_id=paperless_id,
     )
-    return {"id": uuid4().hex, **session.model_dump(mode="json")}
+    payload = {"id": uuid4().hex, **session.model_dump(mode="json")}
+    payload["suggested_account_id"] = int(detected["account_id"]) if detected else None
+    return payload
+
+
+def preview_document(
+    engine: Engine, settings: Settings, paperless_id: int
+) -> dict[str, Any]:
+    data, filename = download_document(settings, paperless_id)
+    statement = parse_pdf_bytes(data, filename)
+    detected = match_statement_account(statement, list_account_refs(engine))
+    last4 = statement.card_last4()
+    return {
+        "paperless_id": paperless_id,
+        "filename": filename,
+        "parser_id": statement.parser_id,
+        "bank_name": statement.bank_name,
+        "iban": statement.iban,
+        "account_number": statement.account_number,
+        "currency": statement.currency,
+        "card_last4": last4,
+        "suggested_account_id": int(detected["account_id"]) if detected else None,
+        "suggested_account_name": detected["name"] if detected else None,
+        "transaction_count": len(statement.transactions),
+    }
 
 
 def _match_from_dict(item: dict[str, Any]) -> TransactionMatch:

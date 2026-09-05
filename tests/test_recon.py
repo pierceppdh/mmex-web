@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import create_engine, text
 
-from mmex_domain.recon import suggest_account_id
+from mmex_domain.recon import match_statement_account, suggest_account_id
+from mmex_recon.schemas import ParsedStatement
 from mmex_web_api.config import Settings
 from mmex_web_api import routes_recon
 
@@ -28,6 +29,41 @@ def test_suggest_account_iban() -> None:
     hay = "Releve-compte FR76123456789012 Boursorama.pdf"
     assert suggest_account_id(hay, accounts) == 1
     assert suggest_account_id("unknown.pdf", accounts) is None
+
+
+def test_card_statement_not_mapped_to_checking_iban() -> None:
+    accounts = [
+        {
+            "account_id": 10,
+            "name": "Boursorama",
+            "account_num": "FR7640618802700004009647489",
+            "account_type": "Checking",
+            "status": "Open",
+            "currency": "EUR",
+        },
+        {
+            "account_id": 6,
+            "name": "Visa Boursorama Cecile",
+            "account_num": "",
+            "account_type": "Credit Card",
+            "status": "Open",
+            "currency": "EUR",
+        },
+    ]
+    hay = "2026-05-28 Boursorama Releve-CB-28-05-2026 FR7640618802700004009647489.pdf"
+    assert suggest_account_id(hay, accounts) == 6
+    stmt = ParsedStatement(
+        parser_id="boursorama_cb",
+        bank_name="Boursorama CB",
+        account_hint="Visa Boursorama Cecile",
+        currency="EUR",
+        iban="FR7640618802700004009647489",
+        account_number="4810********6161",
+        metadata={"card_number": "4810********6161"},
+    )
+    acc = match_statement_account(stmt, accounts)
+    assert acc is not None
+    assert acc["account_id"] == 6
 
 
 def test_recon_inbox_unconfigured(authed_client) -> None:
