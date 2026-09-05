@@ -1,6 +1,6 @@
 [project]
 name = "mmex-web"
-version = "1.13.2"
+version = "1.14.0"
 description = "Local-network web client for Money Manager Ex (.mmb)"
 readme = "README.md"
 license = { text = "GPL-2.0-or-later" }
@@ -13,6 +13,8 @@ dependencies = [
     "sqlalchemy>=2.0",
     "python-multipart>=0.0.9",
     "itsdangerous>=2.2.0",
+    "pdfplumber>=0.11",
+    "rapidfuzz>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -26,8 +28,8 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["apps/api", "packages/mmex-domain"]
+where = ["apps/api", "packages/mmex-domain", "packages/mmex-recon"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "apps/api", "packages/mmex-domain"]
+pythonpath = [".", "apps/api", "packages/mmex-domain", "packages/mmex-recon"]

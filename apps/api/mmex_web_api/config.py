@@ -31,8 +31,15 @@ class Settings(BaseSettings):
     paperless_url: str = ""
     paperless_token: str = ""
     paperless_inbox_tag: str = "Nouveau-Relevé"
+    paperless_done_tag: str = "Pointé"
 
-    @field_validator("paperless_url", "paperless_token", "paperless_inbox_tag", mode="before")
+    @field_validator(
+        "paperless_url",
+        "paperless_token",
+        "paperless_inbox_tag",
+        "paperless_done_tag",
+        mode="before",
+    )
     @classmethod
     def _strip_env(cls, value: object) -> object:
         if isinstance(value, str):

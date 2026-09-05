@@ -3,6 +3,33 @@ import { api } from "./api";
 import type { MessageKey } from "./i18n";
 import type { Account, ReconDoc, ReconInbox } from "./types";
 
+type MatchRow = {
+  bank_transaction: { date: string; description: string; amount: string };
+  status: string;
+  include: boolean;
+  selected_trans_id: number | null;
+  selected_payee_name: string | null;
+  candidates: {
+    score: number;
+    amount_match: boolean;
+    mmex_transaction: {
+      trans_id: number;
+      payee_name: string | null;
+      amount: string;
+      trans_date: string;
+    };
+  }[];
+};
+
+type ReconSession = {
+  id: string;
+  account_id: number;
+  account_name: string;
+  statement: { bank_name: string; parser_id: string; transactions: unknown[] };
+  matches: MatchRow[];
+  committed?: boolean;
+};
+
 type Props = {
   t: (key: MessageKey) => string;
   accounts: Account[];
@@ -10,16 +37,20 @@ type Props = {
   docId?: number;
   onOpen: (docId: number) => void;
   onBack: () => void;
+  onCommitted: () => void;
 };
 
 function docLabel(doc: ReconDoc): string {
   return doc.title || doc.original_file_name || `#${doc.id}`;
 }
 
-export function Recon({ t, accounts, accountId, docId, onOpen, onBack }: Props) {
+export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitted }: Props) {
   const [inbox, setInbox] = useState<ReconInbox | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickedAccount, setPickedAccount] = useState(accountId ?? 0);
+  const [session, setSession] = useState<ReconSession | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
 
   useEffect(() => {
     void api
@@ -36,6 +67,59 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack }: Props) 
     else if (accountId) setPickedAccount(accountId);
   }, [selected?.account_id, accountId]);
 
+  async function runMatch() {
+    if (!selected) return;
+    if (!pickedAccount) {
+      setError(t("reconNeedAccount"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const created = await api.post<ReconSession>("/api/recon/sessions", {
+        paperless_id: selected.id,
+        account_id: pickedAccount,
+      });
+      setSession(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("saveError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function patchRow(index: number, body: Record<string, unknown>) {
+    if (!session) return;
+    try {
+      const next = await api.patch<ReconSession>(
+        `/api/recon/sessions/${session.id}/matches/${index}`,
+        body,
+      );
+      setSession(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("saveError"));
+    }
+  }
+
+  async function doCommit(dryRun: boolean) {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await api.post<{ success: boolean; message: string }>(
+        `/api/recon/sessions/${session.id}/commit`,
+        { dry_run: dryRun },
+      );
+      setResult(out.message);
+      if (out.success && !dryRun) onCommitted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("saveError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (docId != null) {
     return (
       <section className="panel recon-wizard">
@@ -44,6 +128,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack }: Props) 
         </button>
         <h2>{t("recon")}</h2>
         {error && <p className="error-text">{error}</p>}
+        {result && <p>{result}</p>}
         {!inbox && !error && <p className="k">{t("loading")}</p>}
         {inbox && !selected && <p className="error-text">{t("reconMissingDoc")}</p>}
         {selected && (
@@ -53,7 +138,6 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack }: Props) 
               {selected.created}
               {selected.tags.length ? ` · ${selected.tags.join(", ")}` : ""}
             </p>
-            <p>{t("reconWizardHint")}</p>
             <label>
               {t("reconChooseAccount")}
               <select
@@ -78,7 +162,80 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack }: Props) 
                 rel="noreferrer"
               >
                 {t("reconPdf")}
-              </a>
+              </a>{" "}
+              <button type="button" disabled={busy} onClick={() => void runMatch()}>
+                {busy ? t("reconBusy") : t("reconRun")}
+              </button>
+            </p>
+          </>
+        )}
+        {session && (
+          <>
+            <p className="k">
+              {session.statement.bank_name} · {session.matches.length} {t("matching")}
+            </p>
+            <div className="table-wrap">
+              <table className="register">
+                <thead>
+                  <tr>
+                    <th>{t("reconInclude")}</th>
+                    <th>{t("date")}</th>
+                    <th>{t("reconBankLine")}</th>
+                    <th>{t("amount")}</th>
+                    <th>{t("reconMatch")}</th>
+                    <th>{t("reconMmex")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {session.matches.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={row.include}
+                          onChange={(e) =>
+                            void patchRow(idx, { include: e.target.checked })
+                          }
+                        />
+                      </td>
+                      <td>{row.bank_transaction.date}</td>
+                      <td>{row.bank_transaction.description}</td>
+                      <td className="num">{row.bank_transaction.amount}</td>
+                      <td>{row.status}</td>
+                      <td>
+                        <select
+                          value={row.selected_trans_id ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            void patchRow(
+                              idx,
+                              v
+                                ? { selected_trans_id: Number(v), force_new_insert: false }
+                                : { selected_trans_id: null, force_new_insert: true },
+                            );
+                          }}
+                        >
+                          <option value="">{t("reconNewInsert")}</option>
+                          {row.candidates.map((c) => (
+                            <option key={c.mmex_transaction.trans_id} value={c.mmex_transaction.trans_id}>
+                              #{c.mmex_transaction.trans_id} {c.mmex_transaction.payee_name ?? ""}{" "}
+                              {c.mmex_transaction.amount}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="editor-actions">
+              <button type="button" className="ghost" disabled={busy} onClick={() => void doCommit(true)}>
+                {t("reconDryRun")}
+              </button>
+              <button type="button" disabled={busy} onClick={() => void doCommit(false)}>
+                {t("reconCommit")}
+              </button>
             </p>
           </>
         )}

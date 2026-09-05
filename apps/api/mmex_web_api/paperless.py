@@ -91,3 +91,67 @@ def download_document(settings: Settings, doc_id: int) -> tuple[bytes, str]:
     if marker in disp:
         name = disp.split(marker, 1)[1].strip().strip('"')
     return data, name
+
+
+def _json_request(method: str, url: str, token: str, body: dict | None = None) -> dict[str, Any]:
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Token {token}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        raise PaperlessError(f"Paperless HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise PaperlessError(str(exc.reason or exc)) from exc
+
+
+def _tag_id(settings: Settings, name: str) -> int | None:
+    base = settings.paperless_url.rstrip("/")
+    payload = _get(
+        f"{base}/api/tags/?{urllib.parse.urlencode({'name__iexact': name, 'page_size': 10})}",
+        settings.paperless_token,
+    )
+    results = payload.get("results") or []
+    if not results:
+        return None
+    return int(results[0]["id"])
+
+
+def mark_reconciled(settings: Settings, doc_id: int) -> dict[str, Any]:
+    if not settings.paperless_url or not settings.paperless_token:
+        return {"updated": False, "error": "not_configured"}
+    base = settings.paperless_url.rstrip("/")
+    token = settings.paperless_token
+    inbox_id = _tag_id(settings, settings.paperless_inbox_tag)
+    done_id = _tag_id(settings, settings.paperless_done_tag)
+    if done_id is None:
+        created = _json_request(
+            "POST",
+            f"{base}/api/tags/",
+            token,
+            {"name": settings.paperless_done_tag, "color": "#4caf50"},
+        )
+        done_id = int(created["id"])
+    doc = _get(f"{base}/api/documents/{int(doc_id)}/", token)
+    tags: set[int] = set()
+    for item in doc.get("tags") or []:
+        if isinstance(item, int):
+            tags.add(item)
+        elif isinstance(item, dict) and "id" in item:
+            tags.add(int(item["id"]))
+    if done_id in tags and (inbox_id is None or inbox_id not in tags):
+        return {"updated": False, "already_reconciled": True}
+    if inbox_id:
+        tags.discard(inbox_id)
+    tags.add(done_id)
+    _json_request("PATCH", f"{base}/api/documents/{int(doc_id)}/", token, {"tags": sorted(tags)})
+    return {"updated": True, "already_reconciled": False}

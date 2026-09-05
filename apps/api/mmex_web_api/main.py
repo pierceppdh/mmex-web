@@ -37,7 +37,7 @@ from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
 from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.13.2"
+APP_VERSION = "1.14.0"
 
 
 class AppState:
@@ -47,6 +47,7 @@ class AppState:
         self.last_backup: Path | None = None
         self.engine: Engine | None = None
         self.auth = AuthStore(settings)
+        self.recon_sessions: dict[str, dict[str, Any]] = {}
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

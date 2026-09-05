@@ -590,6 +590,7 @@ export default function App() {
             docId={view.kind === "reconDoc" ? view.docId : undefined}
             onOpen={(docId) => go({ kind: "reconDoc", docId })}
             onBack={() => go({ kind: "recon" })}
+            onCommitted={() => void loadLedger()}
           />
         )}
         {view.kind === "tools" && dash && (

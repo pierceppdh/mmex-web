@@ -16,6 +16,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY apps/api ./apps/api
 COPY packages/mmex-domain ./packages/mmex-domain
+COPY packages/mmex-recon ./packages/mmex-recon
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
