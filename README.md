@@ -36,6 +36,8 @@ docker compose -f compose.yaml -f compose.local.yaml up --build
 
 Put a **copy** of `data.mmb` in `./data/data.mmb`. Do not mount the live desktop file until the lock is proven.
 
+On OMV the host bind is `${MMEX_HOST_VOLUME:-/data/mmex-web}:/data`. Homepage.dev discovery labels use group **Compte**.
+
 ### Writer lock (`mmex-lock-v1`)
 
 MMEX Web takes `data.mmb.lock` on start. Footer **Céder le verrou** / **Prendre le verrou** yields to (or takes back from) `bank-reconciliation-app`. The recon app acquires the same sidecar only around a real commit. POSIX `flock` + JSON `{protocol, holder, pid, acquired_at}`.

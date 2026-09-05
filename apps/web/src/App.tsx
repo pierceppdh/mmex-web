@@ -43,6 +43,13 @@ export default function App() {
     typeof window !== "undefined" ? pathToView(window.location.pathname) : { kind: "home" },
   );
   const [navOpen, setNavOpen] = useState(false);
+  const [navFolded, setNavFolded] = useState(() => {
+    try {
+      return localStorage.getItem("mmex-nav-folded") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [newTxnNonce, setNewTxnNonce] = useState(0);
   const [theme, setTheme] = useState<ThemePref>(() => readTheme());
@@ -234,6 +241,16 @@ export default function App() {
         label: locale === "en" ? g.label_en : g.label_fr,
         run: () => go({ kind: "type", accountType: g.account_type }),
       })),
+      ...(showClosed ? dash.accounts : dash.accounts.filter((a) => a.status !== "Closed")).map((acc) => ({
+        id: `acc-${acc.account_id}`,
+        label: `${t("account")}: ${acc.name}`,
+        run: () => go({ kind: "account", accountId: acc.account_id }),
+      })),
+      ...(reconInbox?.documents ?? []).map((doc) => ({
+        id: `recon-doc-${doc.id}`,
+        label: `${t("recon")}: ${doc.title || doc.original_file_name || `#${doc.id}`}`,
+        run: () => go({ kind: "reconDoc", docId: doc.id }),
+      })),
       {
         id: "new-txn",
         label: t("newTransaction"),
@@ -306,7 +323,7 @@ export default function App() {
       })),
     ];
     return list;
-  }, [dash, locale, t, view, health, go]);
+  }, [dash, locale, t, view, health, go, showClosed, reconInbox]);
 
   async function signOut() {
     await api.post("/api/auth/logout");
@@ -350,7 +367,10 @@ export default function App() {
   const navGroups = dash ? visibleGroups(dash, showClosed) : [];
 
   return (
-    <div className={`shell${navOpen ? " nav-open" : ""}`} lang={locale}>
+    <div
+      className={`shell${navOpen ? " nav-open" : ""}${navFolded ? " nav-folded" : ""}`}
+      lang={locale}
+    >
       {navOpen && (
         <button
           type="button"
@@ -362,6 +382,25 @@ export default function App() {
       <aside className="nav">
         <div className="nav-brand">
           <strong>{t("appName")}</strong>
+          <button
+            type="button"
+            className="nav-fold"
+            aria-label={navFolded ? t("expandMenu") : t("foldMenu")}
+            title={navFolded ? t("expandMenu") : t("foldMenu")}
+            onClick={() => {
+              setNavFolded((prev) => {
+                const next = !prev;
+                try {
+                  localStorage.setItem("mmex-nav-folded", next ? "1" : "0");
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            }}
+          >
+            {navFolded ? "›" : "‹"}
+          </button>
           <button type="button" className="nav-close" onClick={() => setNavOpen(false)}>
             ×
           </button>

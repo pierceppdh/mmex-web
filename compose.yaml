@@ -22,9 +22,17 @@ services:
       PAPERLESS_TOKEN: ${PAPERLESS_TOKEN:-}
       PAPERLESS_INBOX_TAG: ${PAPERLESS_INBOX_TAG:-Nouveau-Relevé}
     volumes:
-      - /data/mmex-web:/data
+      # Dockhand: set MMEX_HOST_VOLUME without a leading space (same trap as ports).
+      - ${MMEX_HOST_VOLUME:-/data/mmex-web}:/data
     dns:
       - "192.168.0.25"
     labels:
       - "dockhand.url=http://omv.home:9090"
       - "dockhand.update=false"
+      - "homepage.group=Compte"
+      - "homepage.name=MMEX Web"
+      - "homepage.icon=mdi-wallet"
+      - "homepage.href=http://omv.home:9090/"
+      - "homepage.description=Livre Money Manager Ex"
+      - "homepage.widget.type=ping"
+      - "homepage.widget.url=http://omv.home:9090/api/health"

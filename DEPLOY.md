@@ -12,7 +12,7 @@ laptop  --push-->  GitHub  --LAN webhook or poll-->  Dockhand on OMV  --build-->
 |---|---|
 | Stack / container | `mmex-web` |
 | URL | `http://omv.home:9090/` |
-| Files | `/data/mmex-web` |
+| Files | `/data/mmex-web` (override with Dockhand env `MMEX_HOST_VOLUME`) |
 
 ## 1. Copy a ledger (do not move the live desktop file)
 
