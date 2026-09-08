@@ -62,6 +62,8 @@ export function Register({
   const [rows, setRows] = useState<TxnRow[]>([]);
   const [total, setTotal] = useState(0);
   const [accountTotal, setAccountTotal] = useState(0);
+  const [filterNet, setFilterNet] = useState<string | null>(null);
+  const [filterActive, setFilterActive] = useState(false);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null | undefined>(undefined);
@@ -88,9 +90,13 @@ export function Register({
         transactions: TxnRow[];
         total: number;
         account_total: number;
+        filter_net_formatted?: string;
+        filter_active?: boolean;
       }>(`${base}?limit=100&offset=${start}${trash}${filterQuery(current)}`);
       setTotal(data.total);
       setAccountTotal(data.account_total);
+      setFilterNet(data.filter_net_formatted ?? null);
+      setFilterActive(Boolean(data.filter_active));
       setRows((prev) => (append ? [...prev, ...data.transactions] : data.transactions));
       setOffset(start + data.transactions.length);
     },
@@ -264,6 +270,10 @@ export function Register({
           <div>
             <div className="k">{t("reconDifference")}</div>
             <div className="v">{account.difference_formatted ?? "—"}</div>
+          </div>
+          <div className={filterActive ? undefined : "dim"}>
+            <div className="k">{t("filterBalance")}</div>
+            <div className="v">{filterNet ?? "—"}</div>
           </div>
         </div>
       )}

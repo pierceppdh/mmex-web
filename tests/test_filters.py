@@ -64,6 +64,12 @@ def test_register_filters_and_running_balance(
     assert dated["total"] == 1
     assert dated["transactions"][0]["payee_name"] == "Netflix"
     assert dated["transactions"][0]["running_balance"] == by_id[2]["running_balance"]
+    assert dated["filter_active"] is True
+    assert Decimal(dated["filter_net"]) == Decimal("-15.25")
+    assert dated["filter_net_formatted"]
+
+    assert body["filter_active"] is False
+    assert Decimal(body["filter_net"]) == Decimal("-47.25")
 
     payee = authed_client.get("/api/accounts/1/transactions", params={"payee_q": "netfl"}).json()
     assert payee["total"] == 1

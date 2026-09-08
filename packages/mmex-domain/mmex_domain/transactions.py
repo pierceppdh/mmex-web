@@ -24,9 +24,10 @@ from mmex_domain.constants import (
     TRANS_TRANSFER,
     TRANS_WITHDRAWAL,
 )
+from mmex_domain.balances import load_currencies
 from mmex_domain.filters import apply_filter, parse_filter
 from mmex_domain.lookups import _category_path
-from mmex_domain.money import as_decimal
+from mmex_domain.money import as_decimal, format_amount
 
 class TransactionError(ValueError):
     """Invalid transaction payload or missing row."""
@@ -241,12 +242,30 @@ def list_transactions(
             item["withdrawal"] = withdrawal
             item["deposit"] = deposit
 
+        filter_net = sum((as_decimal(p["flow"]) for p in parsed), Decimal("0"))
+        cid = conn.execute(
+            text("SELECT CURRENCYID FROM ACCOUNTLIST_V1 WHERE ACCOUNTID = :id"),
+            {"id": account_id},
+        ).scalar()
+        currency = load_currencies(conn).get(int(cid or 0))
+        filter_net_formatted = format_amount(
+            filter_net,
+            scale=currency["scale"] if currency else 100,
+            pfx=currency["pfx"] if currency else "",
+            sfx=currency["sfx"] if currency else "",
+            decimal_point=currency["decimal_point"] if currency else ".",
+            group_separator=currency["group_separator"] if currency else " ",
+        )
+
     return {
         "account_id": account_id,
         "account_name": name,
         "initial_bal": str(initial),
         "total": total,
         "account_total": account_total,
+        "filter_net": str(filter_net),
+        "filter_net_formatted": filter_net_formatted,
+        "filter_active": bool(filt),
         "limit": limit,
         "offset": offset,
         "filter": filt,
