@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
-from mmex_domain.constants import NOT_SET, REF_TRANSACTION, REF_TRANSACTION_SPLIT
+from mmex_domain.constants import NOT_SET, REF_TRANSACTION, REF_TRANSACTION_SPLIT, TRANS_TRANSFER
 from mmex_domain.money import as_decimal
 
 
@@ -135,6 +135,14 @@ def apply_filter(
     if "tag_id" in filt:
         tag_hits = _load_tag_hits(conn, trans_ids, filt["tag_id"])
 
+    payee_name_for_id = ""
+    if "payee_id" in filt:
+        prow = conn.execute(
+            text("SELECT PAYEENAME FROM PAYEE_V1 WHERE PAYEEID = :id"),
+            {"id": filt["payee_id"]},
+        ).fetchone()
+        payee_name_for_id = (prow[0] or "").strip().lower() if prow else ""
+
     matched: list[dict[str, Any]] = []
     for item in rows:
         day = (item.get("trans_date") or "")[:10]
@@ -142,11 +150,8 @@ def apply_filter(
             continue
         if "date_to" in filt and day > filt["date_to"]:
             continue
-        if "payee_id" in filt and int(item.get("payee_id") or NOT_SET) != filt["payee_id"]:
-            continue
-        if "payee_q" in filt:
-            name = (item.get("payee_name") or "").lower()
-            if filt["payee_q"] not in name:
+        if "payee_id" in filt or "payee_q" in filt:
+            if not _payee_matches(item, filt, payee_name_for_id):
                 continue
         if "trans_code" in filt and item.get("trans_code") != filt["trans_code"]:
             continue
@@ -180,3 +185,25 @@ def apply_filter(
                 continue
         matched.append(item)
     return matched
+
+
+def _transfer_account_names(item: dict[str, Any]) -> list[str]:
+    return [
+        (item.get("from_account_name") or "").strip().lower(),
+        (item.get("to_account_name") or "").strip().lower(),
+    ]
+
+
+def _payee_matches(item: dict[str, Any], filt: dict[str, Any], payee_name_for_id: str) -> bool:
+    if "payee_id" in filt:
+        if int(item.get("payee_id") or NOT_SET) == filt["payee_id"]:
+            return True
+        if item.get("trans_code") == TRANS_TRANSFER and payee_name_for_id:
+            return payee_name_for_id in _transfer_account_names(item)
+        return False
+    q = filt.get("payee_q") or ""
+    if q in (item.get("payee_name") or "").lower():
+        return True
+    if item.get("trans_code") == TRANS_TRANSFER:
+        return any(q in name for name in _transfer_account_names(item) if name)
+    return False

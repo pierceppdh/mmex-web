@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { PayeeField } from "./PayeeField";
+import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
 import type { MessageKey } from "./i18n";
 import type { Account, Category, ReconDoc, ReconInbox } from "./types";
 
@@ -96,6 +97,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const [result, setResult] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [sort, setSort] = useState<SortState>({ key: "date", dir: "asc" });
 
   useEffect(() => {
     void api
@@ -182,6 +184,27 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   }
 
   const row = session && selectedIdx != null ? session.matches[selectedIdx] : undefined;
+  const shownMatches = useMemo(() => {
+    if (!session) return [];
+    return sortBy(
+      session.matches.map((m, i) => ({ m, i })),
+      sort,
+      ({ m }, key) => {
+        if (key === "include") return m.include ? 1 : 0;
+        if (key === "date") return m.bank_transaction.date;
+        if (key === "desc") return m.bank_transaction.description;
+        if (key === "amount") return m.bank_transaction.amount;
+        if (key === "status") return m.status;
+        if (key === "mmex") {
+          const linked = linkedTxn(m);
+          if (linked) return mmexLabel(linked, t);
+          if (m.insert_as_transfer) return m.transfer_counterpart_account_name || "";
+          return m.selected_payee_name || "";
+        }
+        return "";
+      },
+    );
+  }, [session, sort, t]);
 
   if (docId != null) {
     return (
@@ -241,16 +264,47 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                 <table className="register">
                   <thead>
                     <tr>
-                      <th>{t("reconInclude")}</th>
-                      <th>{t("date")}</th>
-                      <th>{t("reconBankLine")}</th>
-                      <th>{t("amount")}</th>
-                      <th>{t("reconMatch")}</th>
-                      <th>{t("reconMmex")}</th>
+                      <SortTh
+                        label={t("reconInclude")}
+                        k="include"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                      />
+                      <SortTh
+                        label={t("date")}
+                        k="date"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                      />
+                      <SortTh
+                        label={t("reconBankLine")}
+                        k="desc"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                      />
+                      <SortTh
+                        label={t("amount")}
+                        k="amount"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                        className="num"
+                      />
+                      <SortTh
+                        label={t("reconMatch")}
+                        k="status"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                      />
+                      <SortTh
+                        label={t("reconMmex")}
+                        k="mmex"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {session.matches.map((m, idx) => {
+                    {shownMatches.map(({ m, i: idx }) => {
                       const linked = linkedTxn(m);
                       return (
                         <tr

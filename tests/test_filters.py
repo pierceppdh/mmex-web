@@ -102,6 +102,38 @@ def test_register_filters_and_running_balance(
     assert follow["total"] == 1
     assert follow["transactions"][0]["trans_id"] == 2
 
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO PAYEE_V1 (PAYEEID, PAYEENAME, CATEGID, ACTIVE) "
+                "VALUES (13, 'Epargne', -1, 1)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO CHECKINGACCOUNT_V1 ("
+                " TRANSID, ACCOUNTID, TOACCOUNTID, PAYEEID, TRANSCODE, TRANSAMOUNT,"
+                " STATUS, NOTES, CATEGID, TRANSDATE, DELETEDTIME, TOTRANSAMOUNT, FOLLOWUPID"
+                ") VALUES "
+                "(4, 1, 2, -1, 'Transfer', '20', '', 'virement', -1, '2026-06-01T00:00:00', '', '20', -1)"
+            )
+        )
+    engine.dispose()
+
+    by_account = authed_client.get(
+        "/api/accounts/1/transactions", params={"payee_q": "eparg"}
+    ).json()
+    assert {t["trans_id"] for t in by_account["transactions"]} == {4}
+
+    by_payee_id = authed_client.get(
+        "/api/accounts/1/transactions", params={"payee_id": 13}
+    ).json()
+    assert {t["trans_id"] for t in by_payee_id["transactions"]} == {4}
+
+    baker = authed_client.get("/api/accounts/1/transactions", params={"payee_id": 10}).json()
+    assert {t["trans_id"] for t in baker["transactions"]} == {1, 3}
+
     found = authed_client.get("/api/payees", params={"q": "netflix", "limit": 10}).json()
     names = [p["name"] for p in found["payees"]]
     assert "Netflix" in names
