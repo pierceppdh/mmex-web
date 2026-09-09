@@ -57,12 +57,16 @@ def list_inbox_documents(settings: Settings) -> list[dict[str, Any]]:
             for t in tags_raw:
                 if isinstance(t, dict) and t.get("name"):
                     tag_names.append(str(t["name"]))
+            correspondent = item.get("correspondent_name") or ""
+            if not correspondent and isinstance(item.get("correspondent"), dict):
+                correspondent = str(item["correspondent"].get("name") or "")
             docs.append(
                 {
                     "id": int(item["id"]),
                     "title": item.get("title") or "",
                     "created": created[:10],
                     "original_file_name": item.get("original_file_name") or "",
+                    "correspondent": correspondent,
                     "tags": tag_names,
                 }
             )

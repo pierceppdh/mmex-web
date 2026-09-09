@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from sqlalchemy.engine import Engine
 
-from mmex_domain.recon import list_account_refs, match_statement_account
+from mmex_domain.recon import list_account_refs, match_statement_account, suggest_account_id
 from mmex_domain.recon_commit import apply_operations
 from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all
 from mmex_recon.parsers.registry import registry
@@ -28,7 +28,39 @@ def parse_pdf_bytes(data: bytes, filename: str) -> ParsedStatement:
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
         tmp.write(data)
         tmp.flush()
-        return registry.parse(Path(tmp.name))
+        statement = registry.parse(Path(tmp.name))
+    meta = dict(statement.metadata or {})
+    meta["source_file"] = filename
+    return statement.model_copy(update={"metadata": meta})
+
+
+def inbox_haystack(doc: dict[str, Any]) -> str:
+    return " ".join(
+        [
+            str(doc.get("title") or ""),
+            str(doc.get("original_file_name") or ""),
+            str(doc.get("correspondent") or ""),
+            " ".join(doc.get("tags") or []),
+        ]
+    )
+
+
+def suggest_inbox_account_id(
+    settings: Settings,
+    doc: dict[str, Any],
+    accounts: list[dict[str, Any]],
+) -> int | None:
+    """Same PDF match as opening recon; filename only if parse fails."""
+    name = str(doc.get("original_file_name") or doc.get("title") or f"doc-{doc.get('id')}.pdf")
+    try:
+        data, filename = download_document(settings, int(doc["id"]))
+        statement = parse_pdf_bytes(data, filename or name)
+        detected = match_statement_account(statement, accounts)
+        if detected:
+            return int(detected["account_id"])
+    except Exception as exc:
+        logger.info("inbox parse for paperless %s: %s", doc.get("id"), exc)
+    return suggest_account_id(inbox_haystack(doc), accounts)
 
 
 def _credit_card(engine: Engine, account_id: int) -> bool:

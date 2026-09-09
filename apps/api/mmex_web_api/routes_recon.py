@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.engine import Engine
 
-from mmex_domain.recon import list_account_refs, suggest_account_id
+from mmex_domain.recon import list_account_refs
 from mmex_domain.transactions import TransactionError
 from mmex_web_api.config import Settings
 from mmex_web_api.deps import (
@@ -24,7 +25,12 @@ from mmex_web_api.paperless import (
     list_inbox_documents,
     mark_reconciled,
 )
-from mmex_web_api.recon_pipeline import build_session, commit_session, preview_document
+from mmex_web_api.recon_pipeline import (
+    build_session,
+    commit_session,
+    preview_document,
+    suggest_inbox_account_id,
+)
 
 router = APIRouter(prefix="/api/recon", dependencies=[Depends(get_current_user)])
 
@@ -42,15 +48,12 @@ def inbox(
     documents: list[dict[str, Any]] = []
     by_account: dict[int, list[dict[str, Any]]] = {}
     unmapped: list[dict[str, Any]] = []
-    for doc in raw:
-        hay = " ".join(
-            [
-                str(doc.get("title") or ""),
-                str(doc.get("original_file_name") or ""),
-                " ".join(doc.get("tags") or []),
-            ]
+    workers = min(4, max(1, len(raw)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        mapped = list(
+            pool.map(lambda doc: suggest_inbox_account_id(settings, doc, accounts), raw)
         )
-        aid = suggest_account_id(hay, accounts)
+    for doc, aid in zip(raw, mapped, strict=True):
         item = {**doc, "account_id": aid}
         documents.append(item)
         if aid is None:
