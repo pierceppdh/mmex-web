@@ -22,7 +22,11 @@ def test_dashboard_and_currencies(authed_client: TestClient, mmex_settings: Sett
     assert body["schema"]["ok"] is True
     assert body["base_currency"]["symbol"] == "EUR"
     assert Decimal(body["net_worth"]) == Decimal("210")
+    assert Decimal(body["net_worth_favorites"]) == Decimal("210")
     assert any(a["name"] == "Courant" for a in body["favorites"])
+    acc0 = body["accounts"][0]
+    assert "reconciled_formatted" in acc0
+    assert "difference_formatted" in acc0
     checking = next(g for g in body["groups"] if g["account_type"] == "Checking")
     assert checking["label_fr"] == "Comptes bancaires"
     assert checking["label_en"] == "Bank accounts"

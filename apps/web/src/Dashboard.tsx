@@ -46,17 +46,26 @@ export function Dashboard({
 
   return (
     <>
-      {!groupFilter && !favoritesOnly && (
+      {!groupFilter && (
         <section className="hero">
-          <div>
-            <div className="k">{t("netWorth")}</div>
-            <div className="net">{dash.net_worth_formatted}</div>
+          <div className="hero-nets">
+            {!favoritesOnly && (
+              <div>
+                <div className="k">{t("netWorth")}</div>
+                <div className="net">{dash.net_worth_formatted}</div>
+              </div>
+            )}
+            <div>
+              <div className="k">{t("netWorthFavorites")}</div>
+              <div className="net">{dash.net_worth_favorites_formatted ?? dash.net_worth_formatted}</div>
+            </div>
             <div className="k">
               {dash.base_currency
                 ? `${t("baseCurrency")} : ${dash.base_currency.name} (${dash.base_currency.symbol})`
                 : ""}
             </div>
           </div>
+          {!favoritesOnly && (
           <div className="home-actions">
             {onNewAccount && (
               <button type="button" className="home-action" onClick={onNewAccount}>
@@ -86,6 +95,23 @@ export function Dashboard({
               </div>
             )}
           </div>
+          )}
+        </section>
+      )}
+
+      {!groupFilter && !favoritesOnly && (dash.assets_summary?.length ?? 0) > 0 && (
+        <section className="panel">
+          <h2>{t("assetsSummary")}</h2>
+          <ul className="accounts summary-list">
+            {dash.assets_summary!.map((g) => (
+              <li key={g.account_type}>
+                <span className="name">{locale === "en" ? g.label_en : g.label_fr}</span>
+                <span className="amt">
+                  {g.total_formatted ?? ""} <span className="k">({g.count})</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -94,6 +120,7 @@ export function Dashboard({
           <h2>
             {locale === "en" ? group.label_en : group.label_fr}{" "}
             <span className="count">{group.count}</span>
+            {group.total_formatted ? <span className="group-total">{group.total_formatted}</span> : null}
           </h2>
           <AccountList
             accounts={group.accounts}
@@ -152,7 +179,20 @@ function AccountList({
                 <span className="closed-tag">{t("closedBadge")}</span>
               ) : null}
             </span>
-            <span className="amt">{acc.display_formatted}</span>
+            <span className="acct-balances">
+              <span className="amt-cell">
+                <span className="k">{t("actualBalance")}</span>
+                <span className="amt">{acc.display_formatted}</span>
+              </span>
+              <span className="amt-cell">
+                <span className="k">{t("reconBalance")}</span>
+                <span className="amt">{acc.reconciled_formatted ?? "—"}</span>
+              </span>
+              <span className="amt-cell">
+                <span className="k">{t("reconDifference")}</span>
+                <span className="amt">{acc.difference_formatted ?? "—"}</span>
+              </span>
+            </span>
           </button>
           {onEdit && (
             <button

@@ -102,6 +102,8 @@ export const STRINGS = {
     lockReadOnlyHint:
       "Lecture seule : un autre processus détient l’écriture (réconciliation ou desktop). Cédez-le là-bas, ou reprenez-le ici.",
     netWorth: "Patrimoine (comptes ouverts)",
+    netWorthFavorites: "Patrimoine (favoris)",
+    assetsSummary: "Synthèse actifs, prêts et titres",
     baseCurrency: "Devise de base",
     upcoming: "échéances ≤ 14 j",
     dashboardHint: "Cliquez un compte pour ouvrir le registre.",
@@ -450,6 +452,8 @@ export const STRINGS = {
     lockReadOnlyHint:
       "Read only: another process holds the writer lock (reconciliation or desktop). Yield it there, or take it back here.",
     netWorth: "Net worth (open accounts)",
+    netWorthFavorites: "Net worth (favorites)",
+    assetsSummary: "Assets, loans and shares",
     baseCurrency: "Base currency",
     upcoming: "due ≤ 14 days",
     dashboardHint: "Open an account to view its register.",

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Chart } from "./Chart";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
 import { api } from "./api";
@@ -55,6 +55,7 @@ export function Reports({ locale, t }: Props) {
   const [grm, setGrm] = useState<GrmItem[]>([]);
   const [grmId, setGrmId] = useState<number | "">("");
   const [grmRun, setGrmRun] = useState<GrmRun | null>(null);
+  const grmFile = useRef<HTMLInputElement>(null);
 
   async function load(reportId = id) {
     setError(null);
@@ -132,34 +133,42 @@ export function Reports({ locale, t }: Props) {
           {t("netWorth")} : {report.net_worth_formatted}
         </p>
       )}
-      {chart ? <Chart {...chart} /> : <p className="k">{t("noData")}</p>}
+      {chart ? (
+        <div className="chart-wrap">
+          <Chart {...chart} />
+        </div>
+      ) : report && !tableRows(report) ? (
+        <p className="k">{t("noData")}</p>
+      ) : null}
       {table(id, report)}
 
-      <section className="panel" style={{ marginTop: "1.5rem" }}>
+      <section className="panel grm-panel">
         <h2>{t("grm")}</h2>
         <div className="mgr-actions" style={{ marginBottom: "0.75rem" }}>
-          <label className="ghost">
+          <input
+            ref={grmFile}
+            type="file"
+            accept=".grm,.zip,application/zip"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const data = new FormData();
+              data.append("file", file);
+              void api
+                .upload<GrmItem>("/api/grm/import", data)
+                .then((item) => {
+                  setError(null);
+                  setGrmId(item.report_id);
+                  return loadGrm();
+                })
+                .catch((err: Error) => setError(err.message));
+              e.target.value = "";
+            }}
+          />
+          <button type="button" className="ghost" onClick={() => grmFile.current?.click()}>
             {t("importGrm")}
-            <input
-              type="file"
-              accept=".grm,.zip"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const data = new FormData();
-                data.append("file", file);
-                void api
-                  .upload<GrmItem>("/api/grm/import", data)
-                  .then((item) => {
-                    setGrmId(item.report_id);
-                    return loadGrm();
-                  })
-                  .catch((err: Error) => setError(err.message));
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </button>
         </div>
         {grm.length === 0 && <p className="k">{t("noGrm")}</p>}
         {grm.length > 0 && (
@@ -210,6 +219,11 @@ export function Reports({ locale, t }: Props) {
   );
 }
 
+function numeric(v: string | number | null | undefined) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function chartProps(id: string, report: Report | null) {
   if (!report) return null;
   if (id === "income_expenses" && report.series?.length) {
@@ -217,26 +231,28 @@ function chartProps(id: string, report: Report | null) {
       kind: "bar" as const,
       categories: report.series.map((s) => String(s.month)),
       series: [
-        { name: "income", data: report.series.map((s) => Number(s.income)) },
-        { name: "expense", data: report.series.map((s) => Number(s.expense)) },
+        { name: "income", data: report.series.map((s) => numeric(s.income)) },
+        { name: "expense", data: report.series.map((s) => numeric(s.expense)) },
       ],
     };
   }
   if ((id === "categories" || id === "payees") && report.series?.length) {
     const key = id === "payees" ? "name" : "path";
-    return {
-      kind: "donut" as const,
-      labels: report.series.map((s) => String(s[key] ?? "")),
-      values: report.series.map((s) => Number(s.expense) || Number(s.income) || 0),
-    };
+    const labels = report.series.map((s) => String(s[key] ?? "")).slice(0, 12);
+    const values = report.series
+      .map((s) => numeric(s.expense) || numeric(s.income) || numeric(s.net))
+      .slice(0, 12);
+    if (!values.some((v) => v !== 0)) return null;
+    return { kind: "donut" as const, labels, values };
   }
   if (id === "cashflow" && report.series?.length) {
     return {
       kind: "line" as const,
       categories: report.series.map((s) => String(s.month)),
       series: [
-        { name: "projected", data: report.series.map((s) => Number(s.projected)) },
-        { name: "out", data: report.series.map((s) => Number(s.scheduled_out)) },
+        { name: "projected", data: report.series.map((s) => numeric(s.projected)) },
+        { name: "in", data: report.series.map((s) => numeric(s.scheduled_in)) },
+        { name: "out", data: report.series.map((s) => numeric(s.scheduled_out)) },
       ],
     };
   }
@@ -247,19 +263,20 @@ function chartProps(id: string, report: Report | null) {
       series: [
         {
           name: "value",
-          data: report.series.slice(0, 18).map((s) => Number(s.value)),
+          data: report.series.slice(0, 18).map((s) => numeric(s.value)),
         },
       ],
     };
   }
   if (id === "budget" && report.year?.lines?.length) {
-    const lines = report.year.lines.filter((l) => Number(l.estimated) || Number(l.actual)).slice(0, 16);
+    const lines = report.year.lines.filter((l) => numeric(l.estimated) || numeric(l.actual)).slice(0, 16);
+    if (!lines.length) return null;
     return {
       kind: "bar" as const,
       categories: lines.map((l) => l.path),
       series: [
-        { name: "estimated", data: lines.map((l) => Number(l.estimated)) },
-        { name: "actual", data: lines.map((l) => Number(l.actual)) },
+        { name: "estimated", data: lines.map((l) => numeric(l.estimated)) },
+        { name: "actual", data: lines.map((l) => numeric(l.actual)) },
       ],
     };
   }
@@ -267,25 +284,30 @@ function chartProps(id: string, report: Report | null) {
     return {
       kind: "bar" as const,
       categories: report.rows.map((r) => String(r.symbol || r.name)),
-      series: [{ name: "market", data: report.rows.map((r) => Number(r.market_base ?? r.market)) }],
+      series: [{ name: "market", data: report.rows.map((r) => numeric(r.market_base ?? r.market)) }],
     };
   }
   if (id === "usage" && report.series?.length) {
     return {
       kind: "bar" as const,
       categories: report.series.map((s) => String(s.month)),
-      series: [{ name: "count", data: report.series.map((s) => Number(s.count)) }],
+      series: [{ name: "count", data: report.series.map((s) => numeric(s.count)) }],
     };
   }
   return null;
 }
 
-function table(_id: string, report: Report | null) {
-  if (!report) return null;
+function tableRows(report: Report | null) {
+  if (!report) return undefined;
   const rows = (report.rows ?? report.series ?? report.year?.lines) as
     | Record<string, string | number | null>[]
     | undefined;
-  if (!rows?.length) return null;
+  return rows?.length ? rows : undefined;
+}
+
+function table(_id: string, report: Report | null) {
+  const rows = tableRows(report);
+  if (!rows) return null;
   return <ReportTable rows={rows} />;
 }
 

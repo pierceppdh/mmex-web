@@ -87,6 +87,11 @@ export default function App() {
     if (typeof window !== "undefined" && window.location.pathname !== path) {
       window.history.pushState(null, "", path);
     }
+    requestAnimationFrame(() => {
+      const main = document.querySelector("main.main");
+      if (main) main.scrollTop = 0;
+      window.scrollTo(0, 0);
+    });
   }, []);
 
   useEffect(() => {
@@ -114,6 +119,9 @@ export default function App() {
   useEffect(() => {
     function onPop() {
       setView(pathToView(window.location.pathname));
+      const main = document.querySelector("main.main");
+      if (main) main.scrollTop = 0;
+      window.scrollTo(0, 0);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);

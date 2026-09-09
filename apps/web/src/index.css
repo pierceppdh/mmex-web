@@ -302,13 +302,14 @@ body {
 .account-link {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 1rem;
   width: 100%;
   background: none;
   border: 0;
   color: inherit;
   cursor: pointer;
-  padding: 0;
+  padding: 0.15rem 0;
   text-align: left;
 }
 
@@ -394,6 +395,68 @@ body {
 
 .chart {
   margin: 0.75rem 0 1rem;
+}
+
+.chart-wrap {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.chart-wrap .chart {
+  margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.grm-panel {
+  margin-top: 1.5rem;
+}
+
+.hero-nets {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.group-total {
+  margin-left: 0.6rem;
+  font-weight: 550;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.acct-balances {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(5.5rem, auto));
+  gap: 0.65rem 1rem;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+.amt-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.amt-cell .k {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summary-list .amt {
+  text-align: right;
 }
 
 .grm-frame {
@@ -1434,6 +1497,25 @@ h2 {
   .hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .acct-balances {
+    grid-template-columns: 1fr;
+    text-align: left;
+    width: 100%;
+  }
+
+  .amt-cell {
+    align-items: flex-start;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .account-link {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
   }
 
   .home-actions {

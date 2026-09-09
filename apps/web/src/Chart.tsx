@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import ApexCharts from "apexcharts";
+import { readTheme, resolvedTheme } from "./theme";
 
 type Series = { name: string; data: number[] };
 
@@ -25,6 +26,9 @@ export function Chart({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const mode = resolvedTheme(readTheme());
+    const muted = mode === "light" ? "#5b6b82" : "#9aa8bc";
+    const line = mode === "light" ? "#d5dee9" : "#2a3548";
     const options: ApexCharts.ApexOptions = {
       chart: {
         type: kind,
@@ -33,18 +37,20 @@ export function Chart({
         toolbar: { show: false },
         fontFamily: "IBM Plex Sans, Segoe UI, system-ui, sans-serif",
       },
-      theme: { mode: "dark" },
-      colors: ["#3dd68c", "#ff6b6b", "#f5c84c", "#7ab8ff", "#c084fc"],
+      theme: { mode },
+      colors: mode === "light"
+        ? ["#1b8f58", "#c62828", "#b45309", "#2563eb", "#7c3aed"]
+        : ["#3dd68c", "#ff6b6b", "#f5c84c", "#7ab8ff", "#c084fc"],
       dataLabels: { enabled: false },
       stroke: { curve: "smooth", width: kind === "line" ? 2 : 0 },
-      grid: { borderColor: "#2a3548" },
-      legend: { labels: { colors: "#9aa8bc" } },
+      grid: { borderColor: line },
+      legend: { labels: { colors: muted } },
       xaxis: {
         categories: kind === "donut" ? undefined : categories,
-        labels: { style: { colors: "#9aa8bc" } },
+        labels: { style: { colors: muted } },
       },
-      yaxis: { labels: { style: { colors: "#9aa8bc" } } },
-      tooltip: { theme: "dark" },
+      yaxis: { labels: { style: { colors: muted } } },
+      tooltip: { theme: mode },
       series: kind === "donut" ? values : series,
       labels: kind === "donut" ? labels : undefined,
       plotOptions: {

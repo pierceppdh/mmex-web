@@ -31,6 +31,60 @@ def test_suggest_account_iban() -> None:
     assert suggest_account_id("unknown.pdf", accounts) is None
 
 
+def _inbox_accounts() -> list[dict]:
+    return [
+        {
+            "account_id": 1,
+            "name": "Boursorama",
+            "account_num": "FR7640618802700004009647489",
+            "account_type": "Checking",
+            "status": "Open",
+            "currency": "EUR",
+        },
+        {
+            "account_id": 2,
+            "name": "Visa Boursorama Pierre",
+            "account_num": "",
+            "account_type": "Credit Card",
+            "status": "Open",
+            "currency": "EUR",
+        },
+        {
+            "account_id": 3,
+            "name": "Visa Boursorama Cecile",
+            "account_num": "",
+            "account_type": "Credit Card",
+            "status": "Open",
+            "currency": "EUR",
+        },
+        {
+            "account_id": 4,
+            "name": "Yuh CHF",
+            "account_num": "",
+            "account_type": "Checking",
+            "status": "Open",
+            "currency": "CHF",
+        },
+        {
+            "account_id": 5,
+            "name": "Yuh EUR",
+            "account_num": "",
+            "account_type": "Checking",
+            "status": "Open",
+            "currency": "EUR",
+        },
+    ]
+
+
+def test_inbox_suggests_checking_cards_and_yuh() -> None:
+    accounts = _inbox_accounts()
+    assert suggest_account_id("2026-04 Releve Boursorama.pdf", accounts) == 1
+    assert suggest_account_id("Boursorama Releve-CB Pierre 7602.pdf", accounts) == 2
+    assert suggest_account_id("Releve-CB Cecile 6161.pdf", accounts) == 3
+    assert suggest_account_id("Yuh CHF relevé 2026.pdf", accounts) == 4
+    assert suggest_account_id("Yuh EUR statement.pdf", accounts) == 5
+
+
 def test_card_statement_not_mapped_to_checking_iban() -> None:
     accounts = [
         {

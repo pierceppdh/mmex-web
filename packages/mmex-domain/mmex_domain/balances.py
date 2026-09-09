@@ -257,17 +257,14 @@ def account_rows(engine: Engine) -> dict[str, Any]:
             )
         ).scalar()
 
-    groups = _group_accounts(accounts)
+    groups = _group_accounts(accounts, base)
     open_accounts = [a for a in accounts if a["status"] == "Open"]
     net_worth = sum((as_decimal(a["display_value_base"]) for a in open_accounts), Decimal("0"))
-    base_formatted = format_amount(
-        net_worth,
-        scale=base["scale"] if base else 100,
-        pfx=base["pfx"] if base else "",
-        sfx=base["sfx"] if base else "",
-        decimal_point=base["decimal_point"] if base else ".",
-        group_separator=base["group_separator"] if base else " ",
-    )
+    favorites = [a for a in open_accounts if a["favorite"]]
+    fav_worth = sum((as_decimal(a["display_value_base"]) for a in favorites), Decimal("0"))
+    asset_types = {"Asset", "Loan", "Shares", "Investment"}
+    assets_summary = [g for g in groups if g["account_type"] in asset_types]
+    base_formatted = _fmt_base(net_worth, base)
     return {
         "base_currency": (
             {
@@ -280,15 +277,31 @@ def account_rows(engine: Engine) -> dict[str, Any]:
         ),
         "net_worth": str(net_worth),
         "net_worth_formatted": base_formatted,
+        "net_worth_favorites": str(fav_worth),
+        "net_worth_favorites_formatted": _fmt_base(fav_worth, base),
         "upcoming_bills": int(upcoming or 0),
         "accounts": accounts,
         "groups": groups,
+        "assets_summary": assets_summary,
         "closed_accounts": [a for a in accounts if a["status"] != "Open"],
-        "favorites": [a for a in open_accounts if a["favorite"]],
+        "favorites": favorites,
     }
 
 
-def _group_accounts(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _fmt_base(amount: Decimal, base: dict[str, Any] | None) -> str:
+    return format_amount(
+        amount,
+        scale=base["scale"] if base else 100,
+        pfx=base["pfx"] if base else "",
+        sfx=base["sfx"] if base else "",
+        decimal_point=base["decimal_point"] if base else ".",
+        group_separator=base["group_separator"] if base else " ",
+    )
+
+
+def _group_accounts(
+    accounts: list[dict[str, Any]], base: dict[str, Any] | None
+) -> list[dict[str, Any]]:
     by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for acc in accounts:
         if acc["status"] != "Open":
@@ -301,15 +314,17 @@ def _group_accounts(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not rows:
             continue
         seen.add(type_name)
-        groups.append(_make_group(type_name, rows))
+        groups.append(_make_group(type_name, rows, base))
     for type_name, rows in by_type.items():
         if type_name in seen:
             continue
-        groups.append(_make_group(type_name, rows))
+        groups.append(_make_group(type_name, rows, base))
     return groups
 
 
-def _make_group(type_name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _make_group(
+    type_name: str, rows: list[dict[str, Any]], base: dict[str, Any] | None
+) -> dict[str, Any]:
     total_base = sum((as_decimal(a["display_value_base"]) for a in rows), Decimal("0"))
     return {
         "account_type": type_name,
@@ -317,6 +332,7 @@ def _make_group(type_name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
         "label_en": ACCOUNT_TYPE_LABEL_EN.get(type_name, type_name),
         "count": len(rows),
         "total_base": str(total_base),
+        "total_formatted": _fmt_base(total_base, base),
         "accounts": rows,
     }
 

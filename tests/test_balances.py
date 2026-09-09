@@ -178,6 +178,7 @@ def test_net_worth_skips_closed(tmp_path: Path) -> None:
 
     payload = account_rows(make_engine(db))
     assert Decimal(payload["net_worth"]) == Decimal("40")
+    assert Decimal(payload["net_worth_favorites"]) == Decimal("40")
     assert len(payload["favorites"]) == 1
     assert payload["upcoming_bills"] == 1
 

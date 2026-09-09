@@ -68,14 +68,17 @@ export type Group = {
   label_fr: string;
   label_en: string;
   count: number;
+  total_formatted?: string;
   accounts: Account[];
 };
 
 export type Dashboard = {
   net_worth_formatted: string;
+  net_worth_favorites_formatted?: string;
   upcoming_bills: number;
   base_currency: { name: string; symbol: string } | null;
   groups: Group[];
+  assets_summary?: Group[];
   closed_accounts?: Account[];
   favorites: Account[];
   accounts: Account[];

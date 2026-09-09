@@ -19,6 +19,8 @@ KEYWORDS_MAP = {
     "releve de carte": "visa boursorama",
     "releve-cb": "visa boursorama",
     "relevé-cb": "visa boursorama",
+    "yuh chf": "yuh chf",
+    "yuh eur": "yuh eur",
     "yuh": "yuh",
     "boursorama": "boursorama",
     "boursobank": "boursorama",
@@ -35,7 +37,11 @@ CARD_HINTS = (
     "releve de carte",
     "relevé de carte",
     "boursorama cb",
+    "carte bancaire",
 )
+
+_PERSON_HINTS = ("pierre", "cecile", "cécile")
+_LAST4_KEYS = tuple(k for k in KEYWORDS_MAP if k.isdigit() and len(k) == 4)
 
 
 def normalize_account_ref(value: str | None) -> str:
@@ -192,7 +198,8 @@ def suggest_account_id(haystack: str, accounts: list[dict[str, Any]]) -> int | N
     """Inbox heuristic when the PDF is not parsed yet (filename / tags)."""
     lower = haystack.lower()
     blob = normalize_account_ref(haystack)
-    looks_card = any(h in lower for h in CARD_HINTS)
+    looks_card = any(h in lower for h in CARD_HINTS) or any(k in lower for k in _LAST4_KEYS)
+    digits = re.findall(r"\d{4}", haystack)
     best_id: int | None = None
     best_score = 0.0
     for acc in accounts:
@@ -200,31 +207,43 @@ def suggest_account_id(haystack: str, accounts: list[dict[str, Any]]) -> int | N
             continue
         name_lower = str(acc.get("name") or "").lower()
         num = normalize_account_ref(str(acc.get("account_num") or ""))
+        acc_type = str(acc.get("account_type") or "")
+        acc_ccy = (str(acc.get("currency") or "")).upper()
         score = 0.0
         if looks_card:
-            if acc.get("account_type") == "Credit Card":
+            if acc_type == "Credit Card":
                 score += 12
             else:
                 score -= 18
-            for keyword, target in KEYWORDS_MAP.items():
-                if keyword in lower and target in name_lower:
-                    score += 40
-                    break
-            digits = re.findall(r"\d{4}", haystack)
-            for last4 in digits:
-                if last4 in str(acc.get("name") or "") or (num.endswith(last4) and len(num) >= 4):
-                    score += 55
-                    break
-        else:
-            if len(num) >= 6 and num in blob:
-                score += 100 + len(num) / 100
-            for keyword, target in KEYWORDS_MAP.items():
-                if keyword in lower and target in name_lower:
-                    score += 40
-                    break
+        elif acc_type == "Credit Card":
+            score -= 22
+        elif acc_type == "Checking":
+            score += 8
+        if not looks_card and len(num) >= 6 and num in blob:
+            score += 100 + len(num) / 100
+        for keyword, target in KEYWORDS_MAP.items():
+            if keyword not in lower:
+                continue
+            if looks_card and acc_type != "Credit Card" and "visa" not in target and "cashback" not in target:
+                continue
+            if target == name_lower:
+                score += 50 + len(keyword)
+            elif target in name_lower:
+                score += 12 + len(keyword) * 0.5
+        for last4 in digits:
+            if last4 in str(acc.get("name") or "") or (num.endswith(last4) and len(num) >= 4):
+                score += 55
+                break
+        for person in _PERSON_HINTS:
+            if person in lower and person in name_lower:
+                score += 40
+        if acc_ccy and re.search(rf"\b{re.escape(acc_ccy)}\b", haystack, re.I):
+            score += 28
+        if name_lower and name_lower in lower:
+            if looks_card and acc_type != "Credit Card":
+                pass
             else:
-                if name_lower and name_lower in lower:
-                    score += 25
+                score += 30
         if score > best_score:
             best_score = score
             best_id = int(acc["account_id"])
