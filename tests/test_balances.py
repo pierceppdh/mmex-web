@@ -179,8 +179,41 @@ def test_net_worth_skips_closed(tmp_path: Path) -> None:
     payload = account_rows(make_engine(db))
     assert Decimal(payload["net_worth"]) == Decimal("40")
     assert Decimal(payload["net_worth_favorites"]) == Decimal("40")
+    assert Decimal(payload["net_worth_favorites_als"]) == Decimal("40")
     assert len(payload["favorites"]) == 1
     assert payload["upcoming_bills"] == 1
+
+
+def test_dashboard_includes_assets_v1(tmp_path: Path) -> None:
+    db = make_mmex_db(tmp_path / "data.mmb")
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Courant", "Checking", "100", favorite="TRUE")
+        _insert_account(conn, 2, "Prêt", "Loan", "-20")
+        conn.execute(
+            text(
+                """
+                INSERT INTO ASSETS_V1 (
+                    ASSETID, STARTDATE, ASSETNAME, ASSETSTATUS, CURRENCYID,
+                    VALUECHANGEMODE, VALUE, VALUECHANGE, NOTES, VALUECHANGERATE, ASSETTYPE
+                ) VALUES (
+                    1, '2020-01-01', 'Maison', 'Open', 1,
+                    'Percentage', 500, 'None', '', 0, 'Property'
+                )
+                """
+            )
+        )
+    engine.dispose()
+
+    payload = account_rows(make_engine(db))
+    assert Decimal(payload["net_worth"]) == Decimal("580")
+    assert Decimal(payload["net_worth_favorites"]) == Decimal("100")
+    assert Decimal(payload["net_worth_favorites_als"]) == Decimal("580")
+    names = [a["name"] for a in payload["ledger_assets"]]
+    assert names == ["Maison"]
+    asset_group = next(g for g in payload["assets_summary"] if g["account_type"] == "Asset")
+    assert asset_group["items"][0]["name"] == "Maison"
+    assert any(g["account_type"] == "Loan" for g in payload["assets_summary"])
 
 
 def test_format_amount_groups() -> None:

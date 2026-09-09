@@ -14,6 +14,7 @@ type Props = {
   onNewAccount?: () => void;
   onOpenScheduled?: () => void;
   onQuickAdd?: () => void;
+  onOpenAssets?: () => void;
 };
 
 export function Dashboard({
@@ -28,6 +29,7 @@ export function Dashboard({
   onNewAccount,
   onOpenScheduled,
   onQuickAdd,
+  onOpenAssets,
 }: Props) {
   const source = groupsProp ?? dash.groups;
   const groups = favoritesOnly
@@ -59,6 +61,12 @@ export function Dashboard({
               <div className="k">{t("netWorthFavorites")}</div>
               <div className="net">{dash.net_worth_favorites_formatted ?? dash.net_worth_formatted}</div>
             </div>
+            {!favoritesOnly && dash.net_worth_favorites_als_formatted && (
+              <div>
+                <div className="k">{t("netWorthFavoritesAls")}</div>
+                <div className="net">{dash.net_worth_favorites_als_formatted}</div>
+              </div>
+            )}
             <div className="k">
               {dash.base_currency
                 ? `${t("baseCurrency")} : ${dash.base_currency.name} (${dash.base_currency.symbol})`
@@ -104,11 +112,40 @@ export function Dashboard({
           <h2>{t("assetsSummary")}</h2>
           <ul className="accounts summary-list">
             {dash.assets_summary!.map((g) => (
-              <li key={g.account_type}>
-                <span className="name">{locale === "en" ? g.label_en : g.label_fr}</span>
-                <span className="amt">
-                  {g.total_formatted ?? ""} <span className="k">({g.count})</span>
-                </span>
+              <li key={g.account_type} className="summary-group">
+                <div className="summary-head">
+                  <span className="name">{locale === "en" ? g.label_en : g.label_fr}</span>
+                  <span className="amt">
+                    {g.total_formatted ?? ""} <span className="k">({g.count})</span>
+                  </span>
+                </div>
+                {g.account_type === "Asset" && (
+                  <ul className="asset-items">
+                    {(g.accounts ?? []).map((acc) => (
+                      <li key={`acc-${acc.account_id}`}>
+                        <button type="button" className="account-link" onClick={() => onOpenAccount(acc.account_id)}>
+                          <span className="name">{acc.name}</span>
+                          <span className="amt">{acc.display_formatted}</span>
+                        </button>
+                      </li>
+                    ))}
+                    {(g.items ?? []).map((item) => (
+                      <li key={`ast-${item.asset_id}`}>
+                        {onOpenAssets ? (
+                          <button type="button" className="account-link" onClick={onOpenAssets}>
+                            <span className="name">{item.name}</span>
+                            <span className="amt">{item.display_formatted}</span>
+                          </button>
+                        ) : (
+                          <>
+                            <span className="name">{item.name}</span>
+                            <span className="amt">{item.display_formatted}</span>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

@@ -565,6 +565,7 @@ export default function App() {
             onNewAccount={() => setAccountEdit("new")}
             onOpenScheduled={() => go({ kind: "scheduled" })}
             onQuickAdd={() => go({ kind: "quickadd" })}
+            onOpenAssets={() => go({ kind: "assets" })}
           />
         )}
         {view.kind === "quickadd" && dash && (

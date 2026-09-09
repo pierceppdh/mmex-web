@@ -63,6 +63,13 @@ export type SavedView = {
   filter: TxnFilter;
 };
 
+export type LedgerAsset = {
+  asset_id: number;
+  name: string;
+  asset_type: string;
+  display_formatted: string;
+};
+
 export type Group = {
   account_type: string;
   label_fr: string;
@@ -70,15 +77,18 @@ export type Group = {
   count: number;
   total_formatted?: string;
   accounts: Account[];
+  items?: LedgerAsset[];
 };
 
 export type Dashboard = {
   net_worth_formatted: string;
   net_worth_favorites_formatted?: string;
+  net_worth_favorites_als_formatted?: string;
   upcoming_bills: number;
   base_currency: { name: string; symbol: string } | null;
   groups: Group[];
   assets_summary?: Group[];
+  ledger_assets?: LedgerAsset[];
   closed_accounts?: Account[];
   favorites: Account[];
   accounts: Account[];

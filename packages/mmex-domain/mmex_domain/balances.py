@@ -259,11 +259,19 @@ def account_rows(engine: Engine) -> dict[str, Any]:
 
     groups = _group_accounts(accounts, base)
     open_accounts = [a for a in accounts if a["status"] == "Open"]
+    ledger_assets, ledger_total = _open_ledger_assets(engine, currencies, base, base_rate)
     net_worth = sum((as_decimal(a["display_value_base"]) for a in open_accounts), Decimal("0"))
+    net_worth += ledger_total
     favorites = [a for a in open_accounts if a["favorite"]]
     fav_worth = sum((as_decimal(a["display_value_base"]) for a in favorites), Decimal("0"))
     asset_types = {"Asset", "Loan", "Shares", "Investment"}
-    assets_summary = [g for g in groups if g["account_type"] in asset_types]
+    als_accounts = [a for a in open_accounts if a["account_type"] in asset_types]
+    combo_ids = {a["account_id"] for a in favorites} | {a["account_id"] for a in als_accounts}
+    combo = (
+        sum((as_decimal(a["display_value_base"]) for a in open_accounts if a["account_id"] in combo_ids), Decimal("0"))
+        + ledger_total
+    )
+    assets_summary = _assets_summary(groups, ledger_assets, ledger_total, base)
     base_formatted = _fmt_base(net_worth, base)
     return {
         "base_currency": (
@@ -279,13 +287,87 @@ def account_rows(engine: Engine) -> dict[str, Any]:
         "net_worth_formatted": base_formatted,
         "net_worth_favorites": str(fav_worth),
         "net_worth_favorites_formatted": _fmt_base(fav_worth, base),
+        "net_worth_favorites_als": str(combo),
+        "net_worth_favorites_als_formatted": _fmt_base(combo, base),
         "upcoming_bills": int(upcoming or 0),
         "accounts": accounts,
         "groups": groups,
+        "ledger_assets": ledger_assets,
         "assets_summary": assets_summary,
         "closed_accounts": [a for a in accounts if a["status"] != "Open"],
         "favorites": favorites,
     }
+
+
+ALS_TYPES = ("Asset", "Loan", "Investment", "Shares")
+
+
+def _open_ledger_assets(
+    engine: Engine,
+    currencies: dict[int, dict[str, Any]],
+    base: dict[str, Any] | None,
+    base_rate: Decimal,
+) -> tuple[list[dict[str, Any]], Decimal]:
+    from mmex_domain.investments import list_assets
+
+    pack = list_assets(engine)
+    rows: list[dict[str, Any]] = []
+    total = Decimal("0")
+    for asset in pack.get("assets") or []:
+        if str(asset.get("status") or "") == "Closed":
+            continue
+        cid = int(asset.get("currency_id") or 0)
+        currency = currencies.get(cid)
+        native = as_decimal(asset.get("current_value"))
+        if int(asset.get("link_count") or 0) > 0:
+            display_base = native
+            formatted = _fmt_base(native, base)
+        else:
+            rate = as_decimal(currency["rate"]) if currency else Decimal("1")
+            display_base = to_base(native, rate, base_rate)
+            formatted = _format(currency, native)
+        total += display_base
+        rows.append(
+            {
+                "asset_id": int(asset["asset_id"]),
+                "name": asset.get("name") or "",
+                "asset_type": asset.get("asset_type") or "Other",
+                "status": asset.get("status") or "Open",
+                "display_formatted": formatted,
+                "display_value_base": str(display_base),
+            }
+        )
+    return rows, total
+
+
+def _assets_summary(
+    groups: list[dict[str, Any]],
+    ledger_assets: list[dict[str, Any]],
+    ledger_total: Decimal,
+    base: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    by_type = {g["account_type"]: dict(g) for g in groups if g["account_type"] in ALS_TYPES}
+    if ledger_assets:
+        existing = by_type.get("Asset")
+        if existing is None:
+            by_type["Asset"] = {
+                "account_type": "Asset",
+                "label_fr": ACCOUNT_TYPE_LABEL_FR["Asset"],
+                "label_en": ACCOUNT_TYPE_LABEL_EN["Asset"],
+                "count": len(ledger_assets),
+                "total_base": str(ledger_total),
+                "total_formatted": _fmt_base(ledger_total, base),
+                "accounts": [],
+                "items": ledger_assets,
+            }
+        else:
+            new_total = as_decimal(existing.get("total_base") or 0) + ledger_total
+            existing["count"] = int(existing.get("count") or 0) + len(ledger_assets)
+            existing["total_base"] = str(new_total)
+            existing["total_formatted"] = _fmt_base(new_total, base)
+            existing["items"] = ledger_assets
+            by_type["Asset"] = existing
+    return [by_type[name] for name in ALS_TYPES if name in by_type]
 
 
 def _fmt_base(amount: Decimal, base: dict[str, Any] | None) -> str:

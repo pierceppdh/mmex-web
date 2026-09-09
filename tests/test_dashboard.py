@@ -23,6 +23,7 @@ def test_dashboard_and_currencies(authed_client: TestClient, mmex_settings: Sett
     assert body["base_currency"]["symbol"] == "EUR"
     assert Decimal(body["net_worth"]) == Decimal("210")
     assert Decimal(body["net_worth_favorites"]) == Decimal("210")
+    assert Decimal(body["net_worth_favorites_als"]) == Decimal("210")
     assert any(a["name"] == "Courant" for a in body["favorites"])
     acc0 = body["accounts"][0]
     assert "reconciled_formatted" in acc0
