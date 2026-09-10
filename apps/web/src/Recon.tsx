@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { PayeeField } from "./PayeeField";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
@@ -91,6 +91,238 @@ function rowKind(row: MatchRow, t: (key: MessageKey) => string) {
 function statusClass(status: string) {
   const key = status.toLowerCase().replace(/_/g, "-");
   return `recon-chip recon-chip-${key}`;
+}
+
+function LineEditor({
+  row,
+  idx,
+  t,
+  openAccounts,
+  sessionAccountId,
+  categories,
+  patchRow,
+}: {
+  row: MatchRow;
+  idx: number;
+  t: (key: MessageKey) => string;
+  openAccounts: Account[];
+  sessionAccountId: number;
+  categories: Category[];
+  patchRow: (index: number, body: Record<string, unknown>) => void;
+}) {
+  const linked = linkedTxn(row);
+  return (
+    <div className="recon-edit-form" onClick={(e) => e.stopPropagation()}>
+      <p className="span-2">
+        <strong>
+          {t("reconEditLine")} {idx + 1}
+        </strong>{" "}
+        <span className={statusClass(row.status)}>{row.status}</span>
+        {row.selected_trans_id ? (
+          <>
+            {" "}
+            {t("reconLinked")}
+            {linked ? ` — ${mmexLabel(linked, t)}` : ` #${row.selected_trans_id}`}
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                void patchRow(idx, {
+                  selected_trans_id: null,
+                  force_new_insert: true,
+                  status: "MANUAL",
+                })
+              }
+            >
+              {t("reconUnlink")}
+            </button>
+          </>
+        ) : null}
+      </p>
+      <label className="chk">
+        <input
+          type="checkbox"
+          checked={row.include}
+          onChange={(e) => void patchRow(idx, { include: e.target.checked })}
+        />
+        {t("reconInclude")}
+      </label>
+      {!row.selected_trans_id && row.status === "FUZZY_MATCHED" && (
+        <label className="chk">
+          <input
+            type="checkbox"
+            checked={row.force_new_insert}
+            onChange={(e) =>
+              void patchRow(idx, { force_new_insert: e.target.checked, status: "MANUAL" })
+            }
+          />
+          {t("reconForceNew")}
+        </label>
+      )}
+      <fieldset>
+        <legend>{t("reconInsertType")}</legend>
+        <label className="chk">
+          <input
+            type="radio"
+            name={`insert-${idx}`}
+            checked={!row.insert_as_transfer}
+            onChange={() =>
+              void patchRow(idx, {
+                insert_as_transfer: false,
+                selected_trans_id: null,
+                force_new_insert: true,
+                status: "MANUAL",
+              })
+            }
+          />
+          {t("reconTxn")}
+        </label>
+        <label className="chk">
+          <input
+            type="radio"
+            name={`insert-${idx}`}
+            checked={row.insert_as_transfer}
+            onChange={() =>
+              void patchRow(idx, {
+                insert_as_transfer: true,
+                selected_trans_id: null,
+                force_new_insert: true,
+                status: "MANUAL",
+              })
+            }
+          />
+          {t("reconTransfer")}
+        </label>
+      </fieldset>
+      {row.insert_as_transfer && !row.selected_trans_id && (
+        <>
+          <label>
+            {t("reconCounterpart")}
+            <select
+              value={row.transfer_counterpart_account_id ?? ""}
+              onChange={(e) => {
+                const id = Number(e.target.value) || null;
+                const acc = openAccounts.find((a) => a.account_id === id);
+                void patchRow(idx, {
+                  transfer_counterpart_account_id: id,
+                  transfer_counterpart_account_name: acc?.name ?? null,
+                  insert_as_transfer: true,
+                  status: "MANUAL",
+                });
+              }}
+            >
+              <option value="">—</option>
+              {openAccounts
+                .filter((a) => a.account_id !== sessionAccountId)
+                .map((a) => (
+                  <option key={a.account_id} value={a.account_id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            {t("reconCounterpartAmount")}
+            <input
+              inputMode="decimal"
+              value={row.transfer_counterpart_amount ?? ""}
+              onChange={(e) =>
+                void patchRow(idx, {
+                  transfer_counterpart_amount: e.target.value || null,
+                })
+              }
+            />
+          </label>
+        </>
+      )}
+      {!row.insert_as_transfer && !row.selected_trans_id && (
+        <>
+          <PayeeField
+            value={row.selected_payee_name ?? ""}
+            payeeId={0}
+            t={t}
+            onChange={(query) =>
+              void patchRow(idx, {
+                selected_payee_name: query,
+                force_new_insert: true,
+                status: "MANUAL",
+              })
+            }
+          />
+          <label>
+            {t("reconTransCode")}
+            <select
+              value={row.force_trans_code || ""}
+              onChange={(e) =>
+                void patchRow(idx, {
+                  force_trans_code: e.target.value || null,
+                  status: "MANUAL",
+                })
+              }
+            >
+              <option value="">{t("reconCodeAuto")}</option>
+              <option value="Withdrawal">{t("reconCodeWithdraw")}</option>
+              <option value="Deposit">{t("reconCodeDeposit")}</option>
+            </select>
+          </label>
+        </>
+      )}
+      {!row.selected_trans_id && (
+        <label>
+          {t("category")}
+          <select
+            value={row.category_id ?? ""}
+            onChange={(e) => {
+              const id = Number(e.target.value) || null;
+              const cat = categories.find((c) => c.categ_id === id);
+              void patchRow(idx, {
+                category_id: id,
+                category_name: cat?.path ?? null,
+                status: "MANUAL",
+              });
+            }}
+          >
+            <option value="">—</option>
+            {categories.map((c) => (
+              <option key={c.categ_id} value={c.categ_id}>
+                {c.path}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {row.candidates.length > 0 && (
+        <div className="span-2">
+          <h4>{t("reconCandidates")}</h4>
+          <ul className="recon-cands">
+            {row.candidates.map((c) => (
+              <li key={c.mmex_transaction.trans_id}>
+                <span>
+                  {candidateLabel(c, t)}
+                  {c.amount_match ? " · =" : ""}
+                </span>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() =>
+                    void patchRow(idx, {
+                      selected_trans_id: c.mmex_transaction.trans_id,
+                      selected_payee_name: c.mmex_transaction.payee_name,
+                      force_new_insert: false,
+                      insert_as_transfer: false,
+                      status: "MANUAL",
+                    })
+                  }
+                >
+                  {t("reconLink")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Props = {
@@ -230,7 +462,6 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     }
   }
 
-  const row = session && selectedIdx != null ? session.matches[selectedIdx] : undefined;
   const shownMatches = useMemo(() => {
     if (!session) return [];
     const filtered = session.matches
@@ -270,7 +501,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   }, [session]);
   useEffect(() => {
     if (selectedIdx == null) return;
-    const row = gridRef.current?.querySelector(`tr[data-idx="${selectedIdx}"]`);
+    const row = gridRef.current?.querySelector(`tr[data-edit="${selectedIdx}"]`);
     row?.scrollIntoView({ block: "nearest" });
   }, [selectedIdx, rowFilter]);
 
@@ -292,7 +523,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
         {result && <p className="recon-flash ok">{result}</p>}
         {!inbox && !error && <p className="k">{t("loading")}</p>}
         {inbox && !selected && <p className="error-text">{t("reconMissingDoc")}</p>}
-        {selected && (
+        {selected && !session && (
           <article className="recon-preview">
             <h3>{t("reconPreview")}</h3>
             {previewCard && (
@@ -464,8 +695,8 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                     {shownMatches.map(({ m, i: idx }) => {
                       const linked = linkedTxn(m);
                       return (
+                        <Fragment key={idx}>
                         <tr
-                          key={idx}
                           data-idx={idx}
                           className={idx === selectedIdx ? "active" : undefined}
                           onClick={() => setSelectedIdx(idx)}
@@ -492,227 +723,27 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                                 : m.selected_payee_name || t("reconNewInsert")}
                           </td>
                         </tr>
+                        {idx === selectedIdx && (
+                          <tr className="recon-edit-row" data-edit={idx}>
+                            <td colSpan={7}>
+                              <LineEditor
+                                row={m}
+                                idx={idx}
+                                t={t}
+                                openAccounts={openAccounts}
+                                sessionAccountId={session.account_id}
+                                categories={categories}
+                                patchRow={patchRow}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
-              <aside className="recon-detail">
-                {!row && <p className="k">{t("reconSelectRow")}</p>}
-                {row && selectedIdx != null && (
-                  <article>
-                    <h3>
-                      {t("reconEditLine")} {selectedIdx + 1}
-                    </h3>
-                    <p>
-                      <strong>{row.bank_transaction.date}</strong> {row.bank_transaction.description}{" "}
-                      <span className="num">({row.bank_transaction.amount})</span>
-                    </p>
-                    <p className="k">{row.status}</p>
-                    {row.selected_trans_id && (
-                      <p>
-                        {t("reconLinked")}
-                        {linkedTxn(row) ? ` — ${mmexLabel(linkedTxn(row)!, t)}` : ` #${row.selected_trans_id}`}
-                        <button
-                          type="button"
-                          className="ghost"
-                          onClick={() =>
-                            void patchRow(selectedIdx, {
-                              selected_trans_id: null,
-                              force_new_insert: true,
-                              status: "MANUAL",
-                            })
-                          }
-                        >
-                          {t("reconUnlink")}
-                        </button>
-                      </p>
-                    )}
-                    <label className="chk">
-                      <input
-                        type="checkbox"
-                        checked={row.include}
-                        onChange={(e) => void patchRow(selectedIdx, { include: e.target.checked })}
-                      />
-                      {t("reconInclude")}
-                    </label>
-                    {!row.selected_trans_id && row.status === "FUZZY_MATCHED" && (
-                      <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={row.force_new_insert}
-                          onChange={(e) =>
-                            void patchRow(selectedIdx, { force_new_insert: e.target.checked, status: "MANUAL" })
-                          }
-                        />
-                        {t("reconForceNew")}
-                      </label>
-                    )}
-                    <fieldset>
-                      <legend>{t("reconInsertType")}</legend>
-                      <label className="chk">
-                        <input
-                          type="radio"
-                          name={`insert-${selectedIdx}`}
-                          checked={!row.insert_as_transfer}
-                          onChange={() =>
-                            void patchRow(selectedIdx, {
-                              insert_as_transfer: false,
-                              selected_trans_id: null,
-                              force_new_insert: true,
-                              status: "MANUAL",
-                            })
-                          }
-                        />
-                        {t("reconTxn")}
-                      </label>
-                      <label className="chk">
-                        <input
-                          type="radio"
-                          name={`insert-${selectedIdx}`}
-                          checked={row.insert_as_transfer}
-                          onChange={() =>
-                            void patchRow(selectedIdx, {
-                              insert_as_transfer: true,
-                              selected_trans_id: null,
-                              force_new_insert: true,
-                              status: "MANUAL",
-                            })
-                          }
-                        />
-                        {t("reconTransfer")}
-                      </label>
-                    </fieldset>
-                    {row.insert_as_transfer && !row.selected_trans_id && (
-                      <>
-                        <label>
-                          {t("reconCounterpart")}
-                          <select
-                            value={row.transfer_counterpart_account_id ?? ""}
-                            onChange={(e) => {
-                              const id = Number(e.target.value) || null;
-                              const acc = openAccounts.find((a) => a.account_id === id);
-                              void patchRow(selectedIdx, {
-                                transfer_counterpart_account_id: id,
-                                transfer_counterpart_account_name: acc?.name ?? null,
-                                insert_as_transfer: true,
-                                status: "MANUAL",
-                              });
-                            }}
-                          >
-                            <option value="">—</option>
-                            {openAccounts
-                              .filter((a) => a.account_id !== session.account_id)
-                              .map((a) => (
-                                <option key={a.account_id} value={a.account_id}>
-                                  {a.name}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                        <label>
-                          {t("reconCounterpartAmount")}
-                          <input
-                            inputMode="decimal"
-                            value={row.transfer_counterpart_amount ?? ""}
-                            onChange={(e) =>
-                              void patchRow(selectedIdx, {
-                                transfer_counterpart_amount: e.target.value || null,
-                              })
-                            }
-                          />
-                        </label>
-                      </>
-                    )}
-                    {!row.insert_as_transfer && !row.selected_trans_id && (
-                      <>
-                        <PayeeField
-                          value={row.selected_payee_name ?? ""}
-                          payeeId={0}
-                          t={t}
-                          onChange={(query) =>
-                            void patchRow(selectedIdx, {
-                              selected_payee_name: query,
-                              force_new_insert: true,
-                              status: "MANUAL",
-                            })
-                          }
-                        />
-                        <label>
-                          {t("reconTransCode")}
-                          <select
-                            value={row.force_trans_code || ""}
-                            onChange={(e) =>
-                              void patchRow(selectedIdx, {
-                                force_trans_code: e.target.value || null,
-                                status: "MANUAL",
-                              })
-                            }
-                          >
-                            <option value="">{t("reconCodeAuto")}</option>
-                            <option value="Withdrawal">{t("reconCodeWithdraw")}</option>
-                            <option value="Deposit">{t("reconCodeDeposit")}</option>
-                          </select>
-                        </label>
-                      </>
-                    )}
-                    {!row.selected_trans_id && (
-                      <label>
-                        {t("category")}
-                        <select
-                          value={row.category_id ?? ""}
-                          onChange={(e) => {
-                            const id = Number(e.target.value) || null;
-                            const cat = categories.find((c) => c.categ_id === id);
-                            void patchRow(selectedIdx, {
-                              category_id: id,
-                              category_name: cat?.path ?? null,
-                              status: "MANUAL",
-                            });
-                          }}
-                        >
-                          <option value="">—</option>
-                          {categories.map((c) => (
-                            <option key={c.categ_id} value={c.categ_id}>
-                              {c.path}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    {row.candidates.length > 0 && (
-                      <div>
-                        <h4>{t("reconCandidates")}</h4>
-                        <ul className="recon-cands">
-                          {row.candidates.map((c) => (
-                            <li key={c.mmex_transaction.trans_id}>
-                              <span>
-                                {candidateLabel(c, t)}
-                                {c.amount_match ? " · =" : ""}
-                              </span>
-                              <button
-                                type="button"
-                                className="ghost"
-                                onClick={() =>
-                                  void patchRow(selectedIdx, {
-                                    selected_trans_id: c.mmex_transaction.trans_id,
-                                    selected_payee_name: c.mmex_transaction.payee_name,
-                                    force_new_insert: false,
-                                    insert_as_transfer: false,
-                                    status: "MANUAL",
-                                  })
-                                }
-                              >
-                                {t("reconLink")}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </article>
-                )}
-              </aside>
             </div>
             <div className="review-footer">
               <div className="footer-balance">

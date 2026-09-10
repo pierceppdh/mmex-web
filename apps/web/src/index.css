@@ -2050,8 +2050,6 @@ body:has(.drawer) {
   min-height: 16rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(12rem, 1fr) auto;
-  gap: 0.75rem;
 }
 
 .recon-grid {
@@ -2103,26 +2101,36 @@ body:has(.drawer) {
   background: color-mix(in srgb, var(--ok) 10%, transparent);
 }
 
-.recon-detail {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  background: var(--panel);
+.recon-edit-row {
+  cursor: default;
+}
+
+.recon-edit-row > td {
+  white-space: normal;
+  background: color-mix(in srgb, var(--ok) 8%, var(--bg));
+  padding: 0.75rem 0.85rem 1rem;
+  border-bottom: 2px solid var(--ok);
+}
+
+.recon-edit-form {
   display: grid;
-  gap: 0.55rem;
-  max-height: min(42vh, 26rem);
-  overflow: auto;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.55rem 1rem;
+  align-items: start;
 }
 
-.recon-detail h3,
-.recon-detail h4 {
-  margin: 0;
+.recon-edit-form .span-2 {
+  grid-column: 1 / -1;
 }
 
-.recon-detail fieldset {
+.recon-edit-form fieldset {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.45rem 0.55rem;
+}
+
+.recon-edit-form h4 {
+  margin: 0 0 0.35rem;
 }
 
 .recon-cands {
@@ -2142,7 +2150,6 @@ body:has(.drawer) {
 @media (max-width: 900px) {
   .recon-review {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(10rem, 1fr) auto;
   }
 
   .recon-grid table {

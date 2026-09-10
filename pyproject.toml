@@ -1,6 +1,6 @@
 [project]
 name = "mmex-web"
-version = "1.16.4"
+version = "1.16.5"
 description = "Local-network web client for Money Manager Ex (.mmb)"
 readme = "README.md"
 license = { text = "GPL-2.0-or-later" }
