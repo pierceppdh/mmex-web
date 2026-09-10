@@ -467,7 +467,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     const filtered = session.matches
       .map((m, i) => ({ m, i }))
       .filter(({ m }) => {
-        if (rowFilter === "todo") return !m.selected_trans_id && m.include;
+        if (rowFilter === "todo") return m.status !== "AUTO_MATCHED";
         if (rowFilter === "linked") return Boolean(m.selected_trans_id);
         return true;
       });
