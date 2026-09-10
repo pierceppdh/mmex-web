@@ -127,6 +127,7 @@ export type ReconDoc = {
   title: string;
   created: string;
   original_file_name: string;
+  correspondent?: string;
   tags: string[];
   account_id: number | null;
 };

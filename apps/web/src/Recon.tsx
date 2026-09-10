@@ -46,10 +46,52 @@ type ReconSession = {
   account_id: number;
   account_name: string;
   suggested_account_id?: number | null;
-  statement: { bank_name: string; parser_id: string; currency?: string };
+  statement: {
+    bank_name: string;
+    parser_id: string;
+    currency?: string;
+    iban?: string | null;
+    account_number?: string | null;
+    period_start?: string | null;
+    period_end?: string | null;
+    opening_balance?: string | null;
+    closing_balance?: string | null;
+  };
   matches: MatchRow[];
   committed?: boolean;
 };
+
+type StatementPreview = {
+  parser_id: string;
+  bank_name: string;
+  iban?: string | null;
+  account_number?: string | null;
+  currency?: string;
+  card_last4?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  opening_balance?: string | null;
+  closing_balance?: string | null;
+  suggested_account_id?: number | null;
+  suggested_account_name?: string | null;
+  transaction_count?: number;
+};
+
+type RowFilter = "all" | "todo" | "linked";
+
+function rowKind(row: MatchRow, t: (key: MessageKey) => string) {
+  if (row.selected_trans_id) return t("reconTypePoint");
+  if (row.insert_as_transfer) return t("reconTransfer");
+  if (row.status === "NO_MATCH" || row.status === "FUZZY_MATCHED" || row.status === "MANUAL") {
+    return t("reconTypeTodo");
+  }
+  return t("reconTypeNew");
+}
+
+function statusClass(status: string) {
+  const key = status.toLowerCase().replace(/_/g, "-");
+  return `recon-chip recon-chip-${key}`;
+}
 
 type Props = {
   t: (key: MessageKey) => string;
@@ -98,6 +140,8 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "asc" });
+  const [preview, setPreview] = useState<StatementPreview | null>(null);
+  const [rowFilter, setRowFilter] = useState<RowFilter>("all");
 
   useEffect(() => {
     void api
@@ -118,9 +162,11 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
 
   useEffect(() => {
     if (docId == null) return;
+    setPreview(null);
     void api
-      .get<{ suggested_account_id: number | null }>(`/api/recon/documents/${docId}/preview`)
+      .get<StatementPreview>(`/api/recon/documents/${docId}/preview`)
       .then((p) => {
+        setPreview(p);
         if (p.suggested_account_id) setPickedAccount(p.suggested_account_id);
       })
       .catch(() => undefined);
@@ -186,8 +232,15 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const row = session && selectedIdx != null ? session.matches[selectedIdx] : undefined;
   const shownMatches = useMemo(() => {
     if (!session) return [];
+    const filtered = session.matches
+      .map((m, i) => ({ m, i }))
+      .filter(({ m }) => {
+        if (rowFilter === "todo") return !m.selected_trans_id && m.include;
+        if (rowFilter === "linked") return Boolean(m.selected_trans_id);
+        return true;
+      });
     return sortBy(
-      session.matches.map((m, i) => ({ m, i })),
+      filtered,
       sort,
       ({ m }, key) => {
         if (key === "include") return m.include ? 1 : 0;
@@ -201,64 +254,155 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
           if (m.insert_as_transfer) return m.transfer_counterpart_account_name || "";
           return m.selected_payee_name || "";
         }
+        if (key === "type") return rowKind(m, t);
         return "";
       },
     );
-  }, [session, sort, t]);
+  }, [session, sort, t, rowFilter]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of session?.matches ?? []) {
+      counts[m.status] = (counts[m.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [session]);
+  const includedCount = session?.matches.filter((m) => m.include).length ?? 0;
+  const stmt = session?.statement;
+  const previewCard = preview || stmt;
 
   if (docId != null) {
     return (
-      <section className="panel recon-wizard">
+      <section className="panel recon-wizard recon-page">
         <button type="button" className="ghost" onClick={onBack}>
           ← {t("reconBack")}
         </button>
-        <h2>{t("recon")}</h2>
+        <header className="review-header">
+          <h2>{t("recon")}</h2>
+          {selected && <h3>{docLabel(selected)}</h3>}
+        </header>
         {error && <p className="error-text">{error}</p>}
-        {result && <p>{result}</p>}
+        {result && <p className="recon-flash ok">{result}</p>}
         {!inbox && !error && <p className="k">{t("loading")}</p>}
         {inbox && !selected && <p className="error-text">{t("reconMissingDoc")}</p>}
         {selected && (
-          <>
-            <h3>{docLabel(selected)}</h3>
-            <p className="k">
-              {selected.created}
-              {selected.tags.length ? ` · ${selected.tags.join(", ")}` : ""}
-            </p>
-            <label>
-              {t("reconChooseAccount")}
-              <select
-                value={pickedAccount || ""}
-                onChange={(e) => setPickedAccount(Number(e.target.value))}
-              >
-                <option value="">{t("reconUnmapped")}</option>
-                {openAccounts.map((a) => (
-                  <option key={a.account_id} value={a.account_id}>
-                    {a.name}
-                  </option>
+          <article className="recon-preview">
+            <h3>{t("reconPreview")}</h3>
+            {previewCard && (
+              <div className="preview-grid">
+                <div>
+                  <div>
+                    <strong>{t("reconParser")}:</strong> {previewCard.parser_id} —{" "}
+                    {previewCard.transaction_count ?? session?.matches.length ?? "—"} {t("reconTxCount")}
+                  </div>
+                  <div>
+                    <strong>{t("account")}:</strong> {session?.account_name || nameById[pickedAccount] || "—"}
+                  </div>
+                  <div>
+                    <strong>{t("reconPeriod")}:</strong> {previewCard.period_start || "—"} →{" "}
+                    {previewCard.period_end || "—"}
+                  </div>
+                  <div>
+                    <strong>{t("baseCurrency")}:</strong> {previewCard.currency || "—"}
+                  </div>
+                  {previewCard.iban ? (
+                    <div>
+                      <strong>{t("reconIban")}:</strong> {previewCard.iban}
+                    </div>
+                  ) : null}
+                  {previewCard.account_number ? (
+                    <div>
+                      <strong>N°</strong> {previewCard.account_number}
+                    </div>
+                  ) : null}
+                  {"card_last4" in previewCard && previewCard.card_last4 ? (
+                    <div>
+                      <strong>{t("reconCard")}:</strong> ****{previewCard.card_last4}
+                    </div>
+                  ) : null}
+                </div>
+                <div>
+                  <div>
+                    <strong>{t("reconOpening")}:</strong> {previewCard.opening_balance ?? "—"}
+                  </div>
+                  <div>
+                    <strong>{t("reconClosing")}:</strong> {previewCard.closing_balance ?? "—"}
+                  </div>
+                  {preview?.suggested_account_name ? (
+                    <div className="k">
+                      {t("reconSuggest")}: {preview.suggested_account_name}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+            {selected.tags.length > 0 && (
+              <div className="paperless-doc-tags">
+                {selected.tags.map((tag) => (
+                  <span className="recon-chip" key={tag}>
+                    {tag}
+                  </span>
                 ))}
-              </select>
-            </label>
-            <p>
-              <a
-                className="ghost recon-pdf"
-                href={`/api/recon/documents/${selected.id}/file`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t("reconPdf")}
-              </a>{" "}
-              <button type="button" disabled={busy} onClick={() => void runMatch()}>
-                {busy ? t("reconBusy") : t("reconRun")}
-              </button>
-            </p>
-          </>
+              </div>
+            )}
+            <div className="account-form">
+              <label>
+                {t("reconChooseAccount")}
+                <select
+                  value={pickedAccount || ""}
+                  onChange={(e) => setPickedAccount(Number(e.target.value))}
+                >
+                  <option value="">{t("reconUnmapped")}</option>
+                  {openAccounts.map((a) => (
+                    <option key={a.account_id} value={a.account_id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="mgr-actions">
+                <a
+                  className="ghost recon-pdf"
+                  href={`/api/recon/documents/${selected.id}/file`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("reconPdf")}
+                </a>
+                <button type="button" className="recon-btn-primary" disabled={busy} onClick={() => void runMatch()}>
+                  {busy ? t("reconBusy") : t("reconRun")}
+                </button>
+              </div>
+            </div>
+          </article>
         )}
         {session && (
           <>
             <p className="k">
-              {session.statement.bank_name} — {session.account_name} · {session.matches.length}{" "}
+              <strong>{session.statement.bank_name}</strong> — {session.account_name} · {session.matches.length}{" "}
               {t("matching")}
             </p>
+            <ul className="status-counts">
+              {Object.entries(statusCounts).map(([st, n]) => (
+                <li key={st}>
+                  <span className={statusClass(st)}>
+                    {st} {n}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="review-filters" role="group">
+              {(["all", "todo", "linked"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={`ghost filter-btn${rowFilter === f ? " active" : ""}`}
+                  onClick={() => setRowFilter(f)}
+                >
+                  {f === "all" ? t("reconFilterAll") : f === "todo" ? t("reconFilterTodo") : t("reconFilterLinked")}
+                </button>
+              ))}
+            </div>
             <div className="recon-review">
               <div className="table-wrap recon-grid">
                 <table className="register">
@@ -296,6 +440,12 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                         onSort={(k) => setSort((s) => toggleSort(s, k))}
                       />
                       <SortTh
+                        label={t("reconTypeCol")}
+                        k="type"
+                        sort={sort}
+                        onSort={(k) => setSort((s) => toggleSort(s, k))}
+                      />
+                      <SortTh
                         label={t("reconMmex")}
                         k="mmex"
                         sort={sort}
@@ -322,7 +472,10 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                           <td>{m.bank_transaction.date}</td>
                           <td>{m.bank_transaction.description}</td>
                           <td className="num">{m.bank_transaction.amount}</td>
-                          <td>{m.status}</td>
+                          <td>
+                            <span className={statusClass(m.status)}>{m.status}</span>
+                          </td>
+                          <td>{rowKind(m, t)}</td>
                           <td>
                             {linked
                               ? mmexLabel(linked, t)
@@ -553,14 +706,21 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                 )}
               </aside>
             </div>
-            <p className="editor-actions">
-              <button type="button" className="ghost" disabled={busy} onClick={() => void doCommit(true)}>
-                {t("reconDryRun")}
-              </button>
-              <button type="button" disabled={busy} onClick={() => void doCommit(false)}>
-                {t("reconCommit")}
-              </button>
-            </p>
+            <div className="review-footer">
+              <div className="footer-balance">
+                <span>
+                  {includedCount} {t("reconIncluded")} / {session.matches.length}
+                </span>
+              </div>
+              <div className="footer-actions">
+                <button type="button" className="ghost" disabled={busy} onClick={() => void doCommit(true)}>
+                  {t("reconDryRun")}
+                </button>
+                <button type="button" className="recon-btn-primary" disabled={busy} onClick={() => void doCommit(false)}>
+                  {t("reconCommit")}
+                </button>
+              </div>
+            </div>
           </>
         )}
       </section>
@@ -568,7 +728,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   }
 
   return (
-    <section className="panel">
+    <section className="panel recon-page">
       <h2>{t("recon")}</h2>
       <p className="k">{t("reconHint")}</p>
       {error && <p className="error-text">{error}</p>}
@@ -577,30 +737,33 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
         <p className="k">{t("reconEmpty")}</p>
       )}
       {inbox && inbox.documents.length > 0 && (
-        <table className="register">
-          <thead>
-            <tr>
-              <th>{t("date")}</th>
-              <th>{t("statement")}</th>
-              <th>{t("account")}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {inbox.documents.map((doc) => (
-              <tr key={doc.id}>
-                <td>{doc.created}</td>
-                <td>{docLabel(doc)}</td>
-                <td>{doc.account_id ? nameById[doc.account_id] ?? "—" : t("reconUnmapped")}</td>
-                <td>
-                  <button type="button" onClick={() => onOpen(doc.id)}>
-                    {t("reconOpen")}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="paperless-doc-list">
+          {inbox.documents.map((doc) => (
+            <article className="paperless-doc" key={doc.id}>
+              <div className="paperless-doc-body">
+                <span className="paperless-doc-title">{docLabel(doc)}</span>
+                <span className="paperless-doc-meta">
+                  {doc.created}
+                  {doc.correspondent ? ` · ${doc.correspondent}` : ""}
+                  {doc.account_id ? ` · ${nameById[doc.account_id] ?? ""}` : ` · ${t("reconUnmapped")}`}
+                </span>
+                <span className="paperless-doc-tags">
+                  {doc.tags.map((tag) => (
+                    <span className="recon-chip" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </span>
+                {doc.original_file_name && doc.original_file_name !== doc.title ? (
+                  <span className="k paperless-doc-file">{doc.original_file_name}</span>
+                ) : null}
+              </div>
+              <button type="button" className="recon-btn-primary" onClick={() => onOpen(doc.id)}>
+                {t("reconOpen")}
+              </button>
+            </article>
+          ))}
+        </div>
       )}
     </section>
   );

@@ -1839,6 +1839,183 @@ body:has(.drawer) {
   font-size: 0.78rem;
 }
 
+.recon-page {
+  max-width: 72rem;
+}
+
+.paperless-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.paperless-doc {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.paperless-doc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.paperless-doc-title {
+  font-weight: 650;
+}
+
+.paperless-doc-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.paperless-doc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+
+.paperless-doc-file {
+  word-break: break-all;
+}
+
+.recon-chip {
+  display: inline-block;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 16%, var(--panel));
+  color: var(--ok);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.recon-chip-auto-matched {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.recon-chip-fuzzy-matched,
+.recon-chip-amount-mismatch {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+}
+
+.recon-chip-no-match {
+  background: color-mix(in srgb, var(--err) 18%, transparent);
+  color: var(--err);
+}
+
+.recon-chip-manual,
+.recon-chip-llm-matched {
+  background: color-mix(in srgb, #7ab8ff 22%, transparent);
+  color: #7ab8ff;
+}
+
+.recon-chip-skip {
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
+  color: var(--muted);
+}
+
+.recon-preview {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  background: var(--bg);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  font-size: 0.92rem;
+}
+
+.account-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.review-header h2,
+.review-header h3 {
+  margin: 0;
+}
+
+.review-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.filter-btn.active {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.status-counts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.review-footer {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  bottom: 0.4rem;
+  z-index: 4;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.recon-btn-primary {
+  background: color-mix(in srgb, var(--ok) 18%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line));
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.recon-btn-primary:disabled {
+  opacity: 0.6;
+}
+
+.recon-flash.ok {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--line));
+  color: var(--ok);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
+
 .recon-wizard {
   display: grid;
   gap: 0.75rem;
@@ -1863,8 +2040,8 @@ body:has(.drawer) {
 
 .recon-review {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.9fr);
-  gap: 0.85rem;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+  gap: 1rem;
   align-items: start;
 }
 
@@ -1878,11 +2055,15 @@ body:has(.drawer) {
 
 .recon-detail {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: var(--bg);
+  border-radius: 10px;
+  padding: 1rem;
+  background: var(--panel);
   display: grid;
   gap: 0.55rem;
+  max-height: 70vh;
+  overflow: auto;
+  position: sticky;
+  top: 0.5rem;
 }
 
 .recon-detail h3,

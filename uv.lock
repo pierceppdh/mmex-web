@@ -499,7 +499,7 @@ wheels = [
 
 [[package]]
 name = "mmex-web"
-version = "1.16.2"
+version = "1.16.3"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
