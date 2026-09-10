@@ -1840,7 +1840,13 @@ body:has(.drawer) {
 }
 
 .recon-page {
-  max-width: 72rem;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.recon-wizard.recon-page {
+  min-height: calc(100vh - 5.5rem);
 }
 
 .paperless-doc-list {
@@ -2017,7 +2023,8 @@ body:has(.drawer) {
 }
 
 .recon-wizard {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
 }
 
@@ -2039,10 +2046,52 @@ body:has(.drawer) {
 }
 
 .recon-review {
+  flex: 1;
+  min-height: 16rem;
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
-  gap: 1rem;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(12rem, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.recon-grid {
+  overflow: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 12rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.recon-grid table {
+  width: 100%;
+  min-width: 48rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.recon-grid th,
+.recon-grid td {
+  padding: 0.32rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.recon-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.recon-grid .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .recon-grid table tr {
@@ -2051,19 +2100,18 @@ body:has(.drawer) {
 
 .recon-grid table tr.active {
   outline: 1px solid var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
 }
 
 .recon-detail {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 1rem;
+  padding: 0.85rem 1rem;
   background: var(--panel);
   display: grid;
   gap: 0.55rem;
-  max-height: 70vh;
+  max-height: min(42vh, 26rem);
   overflow: auto;
-  position: sticky;
-  top: 0.5rem;
 }
 
 .recon-detail h3,
@@ -2094,5 +2142,10 @@ body:has(.drawer) {
 @media (max-width: 900px) {
   .recon-review {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(10rem, 1fr) auto;
+  }
+
+  .recon-grid table {
+    min-width: 36rem;
   }
 }

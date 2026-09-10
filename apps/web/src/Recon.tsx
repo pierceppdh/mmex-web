@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { PayeeField } from "./PayeeField";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
@@ -142,6 +142,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "asc" });
   const [preview, setPreview] = useState<StatementPreview | null>(null);
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
+  const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void api
@@ -267,6 +268,12 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     }
     return counts;
   }, [session]);
+  useEffect(() => {
+    if (selectedIdx == null) return;
+    const row = gridRef.current?.querySelector(`tr[data-idx="${selectedIdx}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [selectedIdx, rowFilter]);
+
   const includedCount = session?.matches.filter((m) => m.include).length ?? 0;
   const stmt = session?.statement;
   const previewCard = preview || stmt;
@@ -404,8 +411,8 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
               ))}
             </div>
             <div className="recon-review">
-              <div className="table-wrap recon-grid">
-                <table className="register">
+              <div className="recon-grid" ref={gridRef}>
+                <table>
                   <thead>
                     <tr>
                       <SortTh
@@ -459,6 +466,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                       return (
                         <tr
                           key={idx}
+                          data-idx={idx}
                           className={idx === selectedIdx ? "active" : undefined}
                           onClick={() => setSelectedIdx(idx)}
                         >
