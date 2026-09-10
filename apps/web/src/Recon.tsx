@@ -293,7 +293,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                 <div>
                   <div>
                     <strong>{t("reconParser")}:</strong> {previewCard.parser_id} —{" "}
-                    {previewCard.transaction_count ?? session?.matches.length ?? "—"} {t("reconTxCount")}
+                    {preview?.transaction_count ?? session?.matches.length ?? "—"} {t("reconTxCount")}
                   </div>
                   <div>
                     <strong>{t("account")}:</strong> {session?.account_name || nameById[pickedAccount] || "—"}
@@ -315,9 +315,9 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                       <strong>N°</strong> {previewCard.account_number}
                     </div>
                   ) : null}
-                  {"card_last4" in previewCard && previewCard.card_last4 ? (
+                  {preview?.card_last4 ? (
                     <div>
-                      <strong>{t("reconCard")}:</strong> ****{previewCard.card_last4}
+                      <strong>{t("reconCard")}:</strong> ****{preview.card_last4}
                     </div>
                   ) : null}
                 </div>
