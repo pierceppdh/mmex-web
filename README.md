@@ -52,7 +52,7 @@ Optional Paperless (inbox tag `Nouveau-Relevé`): set `PAPERLESS_URL` and `PAPER
 
 Use **Saisie rapide** (FAB on small screens). It writes `CHECKINGACCOUNT_V1`, not `MMEX_New_Transaction.db`.
 
-To empty leftover PHP WebApp reminders: copy `MMEX_New_Transaction.db` into the mmex-web data dir (or set `WEBAPP_DB_PATH`), then **Outils → Ancienne WebApp**. After a successful import you can stop the `webmmxapp` stack on **9080**. Do not point this container at the live desktop ledger.
+To empty leftover PHP WebApp reminders: host `/data/webmmxapp` is mounted and `WEBAPP_DB_PATH` points at `MMEX_New_Transaction.db`. Use **Outils → Ancienne WebApp**. After a successful import you can stop the `webmmxapp` stack on **9080**. Do not point this container at the live desktop ledger.
 
 ## Layout
 

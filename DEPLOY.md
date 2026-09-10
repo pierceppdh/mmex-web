@@ -32,7 +32,7 @@ Yield the lock in the UI before a bank-reconciliation-app commit; take it back a
 
 Réconciliation inbox: add Dockhand env `PAPERLESS_URL` and `PAPERLESS_TOKEN` (tag `Nouveau-Relevé` by default). Those names must stay in `compose.yaml` `environment:` or the container never sees them. Matching/commit of PDF lines is not in this image yet; the menu lists pending statements mapped to accounts. Check `/api/health` → `paperless.configured`.
 
-Phone capture is **Saisie rapide** on 9090. After ingesting leftover `MMEX_New_Transaction.db` from Outils, stop Dockhand stack `webmmxapp` (9080). Optional Dockhand env `WEBAPP_DB_PATH` (passed through `compose.yaml`); bind-mount the 9080 data dir if the path is outside `/data/mmex-web`.
+Phone capture is **Saisie rapide** on 9090. The compose file bind-mounts host `/data/webmmxapp` and sets `WEBAPP_DB_PATH=/data/webmmxapp/MMEX_New_Transaction.db`. Ingest leftovers from **Outils → Ancienne WebApp**, then you can stop Dockhand stack `webmmxapp` (9080).
 
 ## 2. Add the Git repository
 

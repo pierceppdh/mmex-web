@@ -21,11 +21,12 @@ services:
       PAPERLESS_URL: ${PAPERLESS_URL:-}
       PAPERLESS_TOKEN: ${PAPERLESS_TOKEN:-}
       PAPERLESS_INBOX_TAG: ${PAPERLESS_INBOX_TAG:-Nouveau-Relevé}
-      # Optional leftover PHP WebApp sidecar (MMEX_New_Transaction.db).
-      WEBAPP_DB_PATH: ${WEBAPP_DB_PATH:-}
+      # Leftover PHP WebApp sidecar. Host path is hardcoded (Dockhand ${VAR} space trap).
+      WEBAPP_DB_PATH: ${WEBAPP_DB_PATH:-/data/webmmxapp/MMEX_New_Transaction.db}
     volumes:
       # Dockhand: set MMEX_HOST_VOLUME without a leading space (same trap as ports).
       - ${MMEX_HOST_VOLUME:-/data/mmex-web}:/data
+      - /data/webmmxapp:/data/webmmxapp
     dns:
       - "192.168.0.25"
     labels:

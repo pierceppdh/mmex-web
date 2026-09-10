@@ -8,5 +8,6 @@ services:
     user: "0:0"
     volumes:
       - ./data:/data
+      - ./data/webmmxapp:/data/webmmxapp
     dns: []
     labels: []
