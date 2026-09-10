@@ -14,6 +14,7 @@ from sqlalchemy.engine import Engine
 
 from mmex_domain.recon import list_account_refs, match_statement_account, suggest_account_id
 from mmex_domain.recon_commit import apply_operations
+from mmex_recon.balance import check_pdf_balances
 from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all
 from mmex_recon.parsers.registry import registry
 from mmex_recon.schemas import MatchStatus, ParsedStatement, ReconciliationSession, TransactionMatch
@@ -93,6 +94,7 @@ def build_session(
     if detected:
         account_id = int(detected["account_id"])
     txs = statement.transactions
+    balance = check_pdf_balances(statement)
     if not txs:
         session = ReconciliationSession(
             source=f"paperless:{paperless_id}",
@@ -100,6 +102,7 @@ def build_session(
             account_id=account_id,
             account_name=_account_name(engine, account_id),
             paperless_doc_id=paperless_id,
+            balance_check=balance,
         )
         payload = {"id": uuid4().hex, **session.model_dump(mode="json")}
         payload["suggested_account_id"] = int(detected["account_id"]) if detected else None
@@ -115,6 +118,7 @@ def build_session(
         account_name=_account_name(engine, account_id),
         matches=matches,
         paperless_doc_id=paperless_id,
+        balance_check=balance,
     )
     payload = {"id": uuid4().hex, **session.model_dump(mode="json")}
     payload["suggested_account_id"] = int(detected["account_id"]) if detected else None

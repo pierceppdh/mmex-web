@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from sqlalchemy import create_engine, text
 
+from decimal import Decimal
+
 from mmex_domain.recon import match_statement_account, suggest_account_id
-from mmex_recon.schemas import ParsedStatement
+from mmex_recon.balance import check_pdf_balances
+from mmex_recon.schemas import BankTransaction, BalanceStatus, ParsedStatement
 from mmex_web_api.config import Settings
 from mmex_web_api import recon_pipeline, routes_recon
 
@@ -241,3 +244,34 @@ def test_recon_inbox_prefers_parsed_statement(authed_client, mmex_settings, monk
 def test_recon_pdf_unconfigured(authed_client) -> None:
     resp = authed_client.get("/api/recon/documents/1/file")
     assert resp.status_code == 502
+
+
+def test_pdf_balance_green_and_red() -> None:
+    txs = [
+        BankTransaction(date="2026-04-02", description="a", amount=Decimal("10")),
+        BankTransaction(date="2026-04-03", description="b", amount=Decimal("-3")),
+    ]
+    ok = check_pdf_balances(
+        ParsedStatement(
+            parser_id="boursorama_compte",
+            bank_name="Boursorama",
+            account_hint="Boursorama",
+            opening_balance=Decimal("100"),
+            closing_balance=Decimal("107"),
+            transactions=txs,
+        )
+    )
+    assert ok.status == BalanceStatus.GREEN
+    assert Decimal(str(ok.computed_closing)) == Decimal("107")
+
+    bad = check_pdf_balances(
+        ParsedStatement(
+            parser_id="boursorama_compte",
+            bank_name="Boursorama",
+            account_hint="Boursorama",
+            opening_balance=Decimal("100"),
+            closing_balance=Decimal("90"),
+            transactions=txs,
+        )
+    )
+    assert bad.status == BalanceStatus.RED

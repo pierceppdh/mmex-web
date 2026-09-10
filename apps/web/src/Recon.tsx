@@ -59,6 +59,14 @@ type ReconSession = {
   };
   matches: MatchRow[];
   committed?: boolean;
+  balance_check?: {
+    status: string;
+    opening_balance_pdf?: string | null;
+    closing_balance_pdf?: string | null;
+    computed_closing?: string | null;
+    difference_pdf?: string | null;
+    message?: string;
+  } | null;
 };
 
 type StatementPreview = {
@@ -506,6 +514,17 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   }, [selectedIdx, rowFilter]);
 
   const includedCount = session?.matches.filter((m) => m.include).length ?? 0;
+  const includedSums = useMemo(() => {
+    let bank = 0;
+    let mmex = 0;
+    for (const m of session?.matches ?? []) {
+      if (!m.include) continue;
+      bank += Number(m.bank_transaction.amount) || 0;
+      const linked = linkedTxn(m);
+      if (linked) mmex += Number(linked.amount) || 0;
+    }
+    return { bank, mmex };
+  }, [session]);
   const stmt = session?.statement;
   const previewCard = preview || stmt;
 
@@ -747,8 +766,27 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
             </div>
             <div className="review-footer">
               <div className="footer-balance">
+                {session.balance_check && (
+                  <span
+                    className={`recon-balance-flag recon-balance-${session.balance_check.status.toLowerCase()}`}
+                  >
+                    {t("reconPdfBalance")}: {session.balance_check.status}
+                    {session.balance_check.opening_balance_pdf != null &&
+                    session.balance_check.closing_balance_pdf != null
+                      ? ` · ${session.balance_check.opening_balance_pdf} + mvt → ${session.balance_check.computed_closing ?? "—"} / ${session.balance_check.closing_balance_pdf}`
+                      : ""}
+                    {session.balance_check.difference_pdf
+                      ? ` (Δ ${session.balance_check.difference_pdf})`
+                      : ""}
+                    {session.balance_check.message ? ` — ${session.balance_check.message}` : ""}
+                  </span>
+                )}
                 <span>
                   {includedCount} {t("reconIncluded")} / {session.matches.length}
+                  {" · "}
+                  {t("reconIncludedBank")}: {includedSums.bank.toFixed(2)}
+                  {" · "}
+                  {t("reconIncludedMmex")}: {includedSums.mmex.toFixed(2)}
                 </span>
               </div>
               <div className="footer-actions">

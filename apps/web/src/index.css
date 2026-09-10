@@ -1993,6 +1993,36 @@ body:has(.drawer) {
   z-index: 4;
 }
 
+.footer-balance {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.recon-balance-flag {
+  display: inline-block;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  font-weight: 650;
+  font-size: 0.85rem;
+}
+
+.recon-balance-green {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.recon-balance-red {
+  background: color-mix(in srgb, var(--err) 18%, transparent);
+  color: var(--err);
+}
+
+.recon-balance-yellow {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+}
+
 .footer-actions {
   display: flex;
   gap: 0.5rem;
