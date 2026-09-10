@@ -21,6 +21,8 @@ services:
       PAPERLESS_URL: ${PAPERLESS_URL:-}
       PAPERLESS_TOKEN: ${PAPERLESS_TOKEN:-}
       PAPERLESS_INBOX_TAG: ${PAPERLESS_INBOX_TAG:-Nouveau-Relevé}
+      # Optional leftover PHP WebApp sidecar (MMEX_New_Transaction.db).
+      WEBAPP_DB_PATH: ${WEBAPP_DB_PATH:-}
     volumes:
       # Dockhand: set MMEX_HOST_VOLUME without a leading space (same trap as ports).
       - ${MMEX_HOST_VOLUME:-/data/mmex-web}:/data

@@ -46,6 +46,17 @@ class Settings(BaseSettings):
             return value.strip()
         return value
 
+    @field_validator("webapp_db_path", mode="before")
+    @classmethod
+    def _webapp_path(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+        return value
+
     @property
     def db_path(self) -> Path:
         if self.mmex_db_path is not None:

@@ -37,7 +37,7 @@ from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
 from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.16.5"
+APP_VERSION = "1.16.6"
 
 
 class AppState:

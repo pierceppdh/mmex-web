@@ -16,6 +16,16 @@ def test_paperless_env_strips_dockhand_space(monkeypatch) -> None:
     assert s.paperless_token == "secret"
 
 
+def test_webapp_db_path_strips_dockhand_space(monkeypatch) -> None:
+    monkeypatch.setenv("WEBAPP_DB_PATH", " /data/webmmxapp/MMEX_New_Transaction.db ")
+    s = Settings(_env_file=None)
+    assert s.webapp_db_path is not None
+    assert str(s.webapp_db_path) == "/data/webmmxapp/MMEX_New_Transaction.db"
+    monkeypatch.setenv("WEBAPP_DB_PATH", " ")
+    empty = Settings(_env_file=None)
+    assert empty.webapp_db_path is None
+
+
 def test_suggest_account_iban() -> None:
     accounts = [
         {
