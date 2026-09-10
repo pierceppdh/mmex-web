@@ -531,10 +531,10 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                 <div>
                   <div>
                     <strong>{t("reconParser")}:</strong> {previewCard.parser_id} —{" "}
-                    {preview?.transaction_count ?? session?.matches.length ?? "—"} {t("reconTxCount")}
+                    {preview?.transaction_count ?? "—"} {t("reconTxCount")}
                   </div>
                   <div>
-                    <strong>{t("account")}:</strong> {session?.account_name || nameById[pickedAccount] || "—"}
+                    <strong>{t("account")}:</strong> {nameById[pickedAccount] || preview?.suggested_account_name || "—"}
                   </div>
                   <div>
                     <strong>{t("reconPeriod")}:</strong> {previewCard.period_start || "—"} →{" "}
