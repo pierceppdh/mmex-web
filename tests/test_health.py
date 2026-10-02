@@ -19,9 +19,6 @@ def _settings(tmp_path: Path, with_db: bool = True) -> Settings:
         mmex_data_dir=data,
         mmex_db_path=db_path,
         enable_openapi=False,
-        secret_key="unit-test-secret-key-not-for-production",
-        auth_username="mmex",
-        auth_password="secret",
     )
 
 

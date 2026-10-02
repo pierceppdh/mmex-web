@@ -33,9 +33,9 @@ from mmex_domain.managers import (
     update_payee,
     update_tag,
 )
-from mmex_web_api.deps import get_compatible_engine, get_current_user, require_write
+from mmex_web_api.deps import get_compatible_engine, require_write
 
-router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api")
 
 
 class PayeeIn(BaseModel):

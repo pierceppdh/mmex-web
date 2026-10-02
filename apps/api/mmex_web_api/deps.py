@@ -6,16 +6,8 @@ from fastapi import HTTPException, Request
 from sqlalchemy.engine import Engine
 
 from mmex_domain.version import SchemaError, require_schema
-from mmex_web_api.auth import SESSION_USER_KEY
 from mmex_web_api.backup import backup_database
 from mmex_web_api.config import Settings
-
-
-def get_current_user(request: Request) -> str:
-    user = request.session.get(SESSION_USER_KEY)
-    if not user:
-        raise HTTPException(status_code=401, detail="authentication required")
-    return user
 
 
 def get_engine(request: Request) -> Engine:

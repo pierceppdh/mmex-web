@@ -6,8 +6,7 @@ and **not** the PHP capture WebApp.
 
 **Status:** PR 16 — mobile quick-add (writes the real `.mmb`) and optional ingest of the PHP WebApp sidecar so port **9080** can be retired. Réconciliation Paperless (`Nouveau-Relevé`): list inbox, parse PDF, fuzzy-match, and commit (`STATUS=R`) while mmex-web holds the writer lock.
 
-First visit with no `AUTH_USERNAME`/`AUTH_PASSWORD` shows a local account bootstrap
-(stored as `data/auth.json`). Ledger APIs require the session cookie.
+There is no login. The app is meant for the home LAN, with remote use through the VPN. Anyone who can open the port can read and write the ledger.
 
 License: [GPL-2.0-or-later](LICENSE).
 

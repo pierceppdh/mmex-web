@@ -21,11 +21,6 @@ class Settings(BaseSettings):
     backup_keep: int = 14
     enable_openapi: bool = False
     static_dir: Path | None = None
-    secret_key: str | None = None
-    auth_username: str | None = None
-    auth_password: str | None = None
-    cookie_secure: bool = False
-    session_max_age: int = 60 * 60 * 24 * 14
     locale_default: str = "fr"
     webapp_db_path: Path | None = None
     paperless_url: str = ""
@@ -74,14 +69,6 @@ class Settings(BaseSettings):
     @property
     def attachments_dir(self) -> Path:
         return self.mmex_data_dir / "attachments"
-
-    @property
-    def auth_file(self) -> Path:
-        return self.mmex_data_dir / "auth.json"
-
-    @property
-    def secret_file(self) -> Path:
-        return self.mmex_data_dir / ".secret_key"
 
     def resolved_webapp_db(self) -> Path | None:
         if self.webapp_db_path is not None:

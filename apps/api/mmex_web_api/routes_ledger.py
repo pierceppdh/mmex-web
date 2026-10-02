@@ -21,12 +21,11 @@ from mmex_domain.version import read_schema_status
 from mmex_domain.views import ViewError, create_view, delete_view, list_views, update_view
 from mmex_web_api.deps import (
     get_compatible_engine,
-    get_current_user,
     get_engine,
     require_write,
 )
 
-router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api")
 
 
 @router.get("/schema")

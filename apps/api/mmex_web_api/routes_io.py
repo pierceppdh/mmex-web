@@ -9,9 +9,9 @@ from fastapi.responses import Response
 from sqlalchemy.engine import Engine
 
 from mmex_domain.io import IoError, export_file, import_file, meta
-from mmex_web_api.deps import get_compatible_engine, get_current_user, require_write
+from mmex_web_api.deps import get_compatible_engine, require_write
 
-router = APIRouter(prefix="/api/io", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/io")
 
 
 def _http(exc: IoError) -> HTTPException:

@@ -18,9 +18,9 @@ from mmex_domain.attachments import (
 )
 from mmex_domain.constants import REF_TRANSACTION
 from mmex_web_api.config import Settings
-from mmex_web_api.deps import get_compatible_engine, get_current_user, get_settings, require_write
+from mmex_web_api.deps import get_compatible_engine, get_settings, require_write
 
-router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api")
 
 
 def _http(exc: AttachmentError) -> HTTPException:

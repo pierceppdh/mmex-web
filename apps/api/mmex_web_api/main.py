@@ -11,16 +11,13 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
-from starlette.middleware.sessions import SessionMiddleware
 
 from mmex_domain.schema_info import inspect_mmex_file
 from mmex_domain.version import read_schema_status
-from mmex_web_api.auth import AuthStore, resolve_secret_key
 from mmex_web_api.backup import backup_database, latest_backup
 from mmex_web_api.config import Settings, load_settings
 from mmex_web_api.db import make_engine
 from mmex_web_api.lock import WriterLock
-from mmex_web_api.routes_auth import router as auth_router
 from mmex_web_api.routes_ledger import router as ledger_router
 from mmex_web_api.routes_managers import router as managers_router
 from mmex_web_api.routes_attachments import router as attachments_router
@@ -46,7 +43,6 @@ class AppState:
         self.lock = WriterLock(settings.lock_path, settings.mmex_lock_holder)
         self.last_backup: Path | None = None
         self.engine: Engine | None = None
-        self.auth = AuthStore(settings)
         self.recon_sessions: dict[str, dict[str, Any]] = {}
 
 
@@ -112,15 +108,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url="/redoc" if settings.enable_openapi else None,
         openapi_url="/openapi.json" if settings.enable_openapi else None,
     )
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=resolve_secret_key(settings),
-        session_cookie="mmex_session",
-        max_age=settings.session_max_age,
-        same_site="lax",
-        https_only=settings.cookie_secure,
-    )
-    app.include_router(auth_router)
     app.include_router(ledger_router)
     app.include_router(transactions_router)
     app.include_router(managers_router)

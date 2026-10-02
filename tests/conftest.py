@@ -50,21 +50,11 @@ def mmex_settings(tmp_path: Path) -> Settings:
         mmex_data_dir=data,
         mmex_db_path=db_path,
         enable_openapi=False,
-        secret_key="unit-test-secret-key-not-for-production",
-        auth_username="mmex",
-        auth_password="secret",
     )
-
-
-def login(client, username: str = "mmex", password: str = "secret"):
-    resp = client.post("/api/auth/login", json={"username": username, "password": password})
-    assert resp.status_code == 200, resp.text
-    return resp
 
 
 @pytest.fixture
 def authed_client(client):
-    login(client)
     return client
 
 

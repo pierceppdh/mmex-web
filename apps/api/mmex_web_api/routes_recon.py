@@ -15,7 +15,6 @@ from mmex_domain.transactions import TransactionError
 from mmex_web_api.config import Settings
 from mmex_web_api.deps import (
     get_compatible_engine,
-    get_current_user,
     get_settings,
     require_write,
 )
@@ -32,7 +31,7 @@ from mmex_web_api.recon_pipeline import (
     suggest_inbox_account_id,
 )
 
-router = APIRouter(prefix="/api/recon", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/recon")
 
 
 @router.get("/inbox")

@@ -94,13 +94,6 @@ export type Dashboard = {
   accounts: Account[];
 };
 
-export type AuthStatus = {
-  authenticated: boolean;
-  username: string | null;
-  bootstrap: boolean;
-  locale_default: "fr" | "en";
-};
-
 export type ManagerId = "payees" | "categories" | "tags" | "currencies" | "fields";
 
 export type View =

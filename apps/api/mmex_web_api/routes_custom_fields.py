@@ -19,9 +19,9 @@ from mmex_domain.custom_fields import (
     update_field,
     values_for,
 )
-from mmex_web_api.deps import get_compatible_engine, get_current_user, require_write
+from mmex_web_api.deps import get_compatible_engine, require_write
 
-router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api")
 
 
 class PropsIn(BaseModel):

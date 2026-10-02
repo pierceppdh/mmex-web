@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Dashboard } from "./Dashboard";
 import { Register } from "./Register";
-import { Login } from "./Login";
 import { Managers } from "./Managers";
 import { Fields } from "./Fields";
 import { Scheduled } from "./Scheduled";
@@ -21,7 +20,6 @@ import { STRINGS, readLocale, writeLocale, type Locale, type MessageKey } from "
 import { pathToView, viewToPath } from "./routes";
 import { applyTheme, readTheme, watchSystemTheme, writeTheme, type ThemePref } from "./theme";
 import type {
-  AuthStatus,
   Dashboard as DashboardData,
   Health,
   ManagerId,
@@ -34,7 +32,7 @@ const SOON = [] as const;
 
 export default function App() {
   const [locale, setLocale] = useState<Locale>(() => readLocale("fr"));
-  const [auth, setAuth] = useState<AuthStatus | null>(null);
+  const [booting, setBooting] = useState(true);
   const [health, setHealth] = useState<Health | null>(null);
   const [dash, setDash] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,17 +155,17 @@ export default function App() {
       setTheme(prefs.theme);
       writeTheme(prefs.theme);
     } catch {
-      /* not signed in or schema */
+      /* schema or ledger not ready */
     }
   }, []);
 
   useEffect(() => {
-    if (!auth?.authenticated) return;
+    if (booting) return;
     const id = window.setInterval(() => {
       void api.get<Health>("/api/health").then(setHealth).catch(() => undefined);
     }, 10000);
     return () => window.clearInterval(id);
-  }, [auth?.authenticated]);
+  }, [booting]);
 
   async function onYieldLock() {
     setLockMsg(null);
@@ -191,23 +189,23 @@ export default function App() {
 
   useEffect(() => {
     api
-      .get<AuthStatus>("/api/auth/status")
-      .then((status) => {
-        setAuth(status);
-        if (status.locale_default === "en" || status.locale_default === "fr") {
-          setLocale((current) => {
-            try {
-              if (localStorage.getItem("mmex-locale")) return current;
-            } catch {
-              /* ignore */
-            }
-            return status.locale_default;
-          });
-        }
-        if (status.authenticated) return loadLedger();
-        return api.get<Health>("/api/health").then(setHealth);
+      .get<{ locale_default: string }>("/api/info")
+      .then((info) => {
+        const next = info.locale_default;
+        if (next !== "en" && next !== "fr") return;
+        setLocale((current) => {
+          try {
+            if (localStorage.getItem("mmex-locale")) return current;
+          } catch {
+            /* ignore */
+          }
+          return next;
+        });
       })
-      .catch((err: Error) => setError(err.message));
+      .catch(() => undefined)
+      .then(() => loadLedger())
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setBooting(false));
   }, [loadLedger]);
 
   useEffect(() => {
@@ -223,7 +221,7 @@ export default function App() {
         setPaletteOpen((open) => !open);
         return;
       }
-      if (event.key === "/" && !typing && auth?.authenticated) {
+      if (event.key === "/" && !typing) {
         event.preventDefault();
         setPaletteOpen(true);
       }
@@ -235,7 +233,7 @@ export default function App() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [auth?.authenticated]);
+  }, []);
 
   const commands: PaletteCommand[] = useMemo(() => {
     if (!dash) return [];
@@ -333,18 +331,6 @@ export default function App() {
     return list;
   }, [dash, locale, t, view, health, go, showClosed, reconInbox]);
 
-  async function signOut() {
-    await api.post("/api/auth/logout");
-    setAuth({
-      authenticated: false,
-      username: null,
-      bootstrap: false,
-      locale_default: locale,
-    });
-    setDash(null);
-    setView({ kind: "home" });
-  }
-
   if (error) {
     return (
       <p className="error-text" style={{ padding: "2rem" }}>
@@ -352,21 +338,7 @@ export default function App() {
       </p>
     );
   }
-  if (!auth) return <p className="k" style={{ padding: "2rem" }}>{t("loading")}</p>;
-
-  if (!auth.authenticated) {
-    return (
-      <Login
-        bootstrap={auth.bootstrap}
-        locale={locale}
-        t={t}
-        onSignedIn={async (username) => {
-          setAuth({ ...auth, authenticated: true, username, bootstrap: false });
-          await loadLedger();
-        }}
-      />
-    );
-  }
+  if (booting) return <p className="k" style={{ padding: "2rem" }}>{t("loading")}</p>;
 
   const selectedAccount =
     view.kind === "account"
@@ -681,16 +653,12 @@ export default function App() {
             {t("takeLock")}
           </button>
         )}
-        <span>{auth.username}</span>
         <button
           type="button"
           className="ghost"
           onClick={() => changeLocale(locale === "fr" ? "en" : "fr")}
         >
           {locale === "fr" ? "EN" : "FR"}
-        </button>
-        <button type="button" className="ghost" onClick={() => void signOut()}>
-          {t("logout")}
         </button>
       </footer>
 
@@ -712,7 +680,7 @@ export default function App() {
           />
         </div>
       )}
-      {view.kind !== "quickadd" && auth.authenticated && (
+      {view.kind !== "quickadd" && (
         <button
           type="button"
           className="fab"

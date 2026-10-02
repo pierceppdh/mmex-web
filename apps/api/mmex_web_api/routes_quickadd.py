@@ -14,9 +14,9 @@ from mmex_domain.transactions import TransactionError
 from mmex_domain.webapp import WebappError, import_sidecar, list_pending, sidecar_status
 from mmex_web_api.backup import backup_database
 from mmex_web_api.config import Settings
-from mmex_web_api.deps import get_compatible_engine, get_current_user, get_settings, require_write
+from mmex_web_api.deps import get_compatible_engine, get_settings, require_write
 
-router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api")
 
 
 class QuickIn(BaseModel):

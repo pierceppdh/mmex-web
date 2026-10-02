@@ -67,12 +67,8 @@ def test_dashboard_conflict_on_bad_schema(tmp_path: Path) -> None:
     settings = Settings(
         mmex_data_dir=data,
         mmex_db_path=db,
-        secret_key="unit-test-secret-key-not-for-production",
-        auth_username="mmex",
-        auth_password="secret",
     )
     app = create_app(settings)
     with TestClient(app) as client:
-        client.post("/api/auth/login", json={"username": "mmex", "password": "secret"})
         resp = client.get("/api/dashboard")
     assert resp.status_code == 409

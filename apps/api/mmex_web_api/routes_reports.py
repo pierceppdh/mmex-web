@@ -9,9 +9,9 @@ from sqlalchemy.engine import Engine
 
 from mmex_domain.budgets import BudgetError
 from mmex_domain.reports import ReportError, catalog, run_report
-from mmex_web_api.deps import get_compatible_engine, get_current_user
+from mmex_web_api.deps import get_compatible_engine
 
-router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api")
 
 
 def _http(exc: ReportError | BudgetError) -> HTTPException:

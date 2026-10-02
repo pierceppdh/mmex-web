@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 
-from mmex_web_api.deps import get_current_user
-
-router = APIRouter(prefix="/api/lock", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/lock")
 
 
 @router.get("")
