@@ -104,7 +104,7 @@ body {
   max-width: 100%;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 16.5rem minmax(0, 1fr);
+  grid-template-columns: 17.75rem minmax(0, 1fr);
   grid-template-rows: 1fr;
   grid-template-areas: "nav main";
 }
@@ -147,9 +147,9 @@ body {
 
 .nav-item {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   width: 100%;
   text-align: left;
   background: transparent;
@@ -158,6 +158,41 @@ body {
   border-radius: 8px;
   padding: 0.38rem 0.55rem;
   cursor: pointer;
+}
+
+.nav-ico {
+  display: block;
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+}
+
+.nav-ico [data-fill] {
+  fill: currentColor;
+  stroke: none;
+}
+
+.nav-item.active .nav-ico,
+.nav-item:hover .nav-ico {
+  color: var(--text);
+}
+
+.nav-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-item > .count {
+  flex: none;
 }
 
 .nav-item:hover {
@@ -1343,11 +1378,13 @@ h2 {
 }
 
 .nav-leaf {
-  padding-left: 1.7rem;
+  padding-left: 1.55rem;
   font-size: 0.82rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.nav-leaf .nav-ico {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 .net {
@@ -1791,7 +1828,7 @@ h2 {
   .nav {
     position: fixed;
     inset: 0 auto 0 0;
-    width: min(18rem, 86vw);
+    width: min(19.25rem, 88vw);
     transform: translateX(-105%);
     transition: transform 0.16s ease;
     z-index: 18;

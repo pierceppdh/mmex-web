@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dashboard } from "./Dashboard";
 import { Register } from "./Register";
 import { Managers } from "./Managers";
@@ -13,6 +13,7 @@ import { Settings } from "./Settings";
 import { Recon } from "./Recon";
 import { QuickAdd } from "./QuickAdd";
 import { AccountEditor } from "./AccountEditor";
+import { NavIcon } from "./NavIcon";
 import { Palette, type PaletteCommand } from "./Palette";
 import { api } from "./api";
 import { visibleGroups } from "./groups";
@@ -28,7 +29,37 @@ import type {
 } from "./types";
 
 const MANAGERS: ManagerId[] = ["payees", "categories", "tags", "currencies", "fields"];
+const MANAGER_ICON: Record<ManagerId, string> = {
+  payees: "person",
+  categories: "folder",
+  tags: "tag",
+  currencies: "coins",
+  fields: "form",
+};
 const SOON = [] as const;
+
+function accountTypeIcon(accountType: string): string {
+  switch (accountType) {
+    case "Cash":
+      return "cash";
+    case "Checking":
+      return "bank";
+    case "Credit Card":
+      return "card";
+    case "Term":
+      return "lock";
+    case "Loan":
+      return "loan";
+    case "Investment":
+      return "trend";
+    case "Asset":
+      return "gem";
+    case "Shares":
+      return "candles";
+    default:
+      return "account";
+  }
+}
 
 function commandShortcut(): string {
   if (typeof navigator === "undefined") return "Ctrl+K";
@@ -450,19 +481,21 @@ export default function App() {
           </button>
         </div>
         <div className="nav-label">{t("navDaily")}</div>
-        <NavButton active={view.kind === "home"} onClick={() => go({ kind: "home" })}>
+        <NavButton icon="home" active={view.kind === "home"} onClick={() => go({ kind: "home" })}>
           {t("home")}
         </NavButton>
         <NavButton
+          icon="quick"
           active={view.kind === "quickadd"}
           onClick={() => go({ kind: "quickadd" })}
         >
           {t("quickAdd")}
         </NavButton>
-        <NavButton active={view.kind === "all"} onClick={() => go({ kind: "all" })}>
+        <NavButton icon="list" active={view.kind === "all"} onClick={() => go({ kind: "all" })}>
           {t("allTransactions")}
         </NavButton>
         <NavButton
+          icon="star"
           active={view.kind === "favorites"}
           onClick={() => go({ kind: "favorites" })}
         >
@@ -472,6 +505,7 @@ export default function App() {
         {navGroups.map((g) => (
           <NavGroup
             key={g.account_type}
+            icon={accountTypeIcon(g.account_type)}
             label={locale === "en" ? g.label_en : g.label_fr}
             count={g.count}
             accounts={g.accounts}
@@ -486,6 +520,7 @@ export default function App() {
           />
         ))}
         <NavButton
+          icon="check"
           active={view.kind === "recon" || view.kind === "reconDoc"}
           onClick={() => go({ kind: "recon" })}
         >
@@ -496,30 +531,35 @@ export default function App() {
         </NavButton>
         <div className="nav-label">{t("navFollow")}</div>
         <NavButton
+          icon="calendar"
           active={view.kind === "scheduled"}
           onClick={() => go({ kind: "scheduled" })}
         >
           {t("scheduled")}
         </NavButton>
         <NavButton
+          icon="wallet"
           active={view.kind === "budgets"}
           onClick={() => go({ kind: "budgets" })}
         >
           {t("budgets")}
         </NavButton>
         <NavButton
+          icon="bars"
           active={view.kind === "reports"}
           onClick={() => go({ kind: "reports" })}
         >
           {t("reports")}
         </NavButton>
         <NavButton
+          icon="trend"
           active={view.kind === "stocks"}
           onClick={() => go({ kind: "stocks" })}
         >
           {t("stocks")}
         </NavButton>
         <NavButton
+          icon="box"
           active={view.kind === "assets"}
           onClick={() => go({ kind: "assets" })}
         >
@@ -527,12 +567,14 @@ export default function App() {
         </NavButton>
         <div className="nav-label">{t("navSettings")}</div>
         <NavButton
+          icon="sliders"
           active={view.kind === "tools"}
           onClick={() => go({ kind: "tools" })}
         >
           {t("tools")}
         </NavButton>
         <NavButton
+          icon="gear"
           active={view.kind === "settings"}
           onClick={() => go({ kind: "settings" })}
         >
@@ -541,6 +583,7 @@ export default function App() {
         {MANAGERS.map((id) => (
           <NavButton
             key={id}
+            icon={MANAGER_ICON[id]}
             active={view.kind === "manager" && view.id === id}
             onClick={() => go({ kind: "manager", id })}
           >
@@ -553,6 +596,7 @@ export default function App() {
             {SOON.map((id) => (
               <NavButton
                 key={id}
+                icon="calendar"
                 active={view.kind === "soon" && view.id === id}
                 dim
                 onClick={() => go({ kind: "soon", id })}
@@ -778,30 +822,47 @@ export default function App() {
   );
 }
 
+function isCount(node: ReactNode): boolean {
+  return (
+    isValidElement<{ className?: string }>(node) &&
+    String(node.props.className ?? "")
+      .split(" ")
+      .includes("count")
+  );
+}
+
 function NavButton({
+  icon,
   active,
   dim,
+  className,
   onClick,
   children,
 }: {
+  icon: string;
   active: boolean;
   dim?: boolean;
+  className?: string;
   onClick: () => void;
   children: ReactNode;
 }) {
+  const parts = Children.toArray(children);
   return (
     <button
       type="button"
-      className={`nav-item${active ? " active" : ""}${dim ? " dim" : ""}`}
+      className={`nav-item${active ? " active" : ""}${dim ? " dim" : ""}${className ? ` ${className}` : ""}`}
       aria-current={active ? "page" : undefined}
       onClick={onClick}
     >
-      {children}
+      <NavIcon name={icon} />
+      <span className="nav-name">{parts.filter((part) => !isCount(part))}</span>
+      {parts.filter(isCount)}
     </button>
   );
 }
 
 function NavGroup({
+  icon,
   label,
   count,
   accounts,
@@ -814,6 +875,7 @@ function NavGroup({
   statements,
   t,
 }: {
+  icon: string;
   label: string;
   count: number;
   accounts: { account_id: number; name: string; status: string }[];
@@ -838,7 +900,7 @@ function NavGroup({
         >
           {open ? "▾" : "▸"}
         </button>
-        <NavButton active={active} onClick={onOpenGroup}>
+        <NavButton icon={icon} active={active} onClick={onOpenGroup}>
           {label}
           <span className="count">{count}</span>
         </NavButton>
@@ -848,16 +910,16 @@ function NavGroup({
           const docs = statements?.[String(acc.account_id)] ?? [];
           const current = activeAccountId === acc.account_id;
           return (
-            <button
+            <NavButton
               key={acc.account_id}
-              type="button"
-              className={`nav-item nav-leaf${current ? " active" : ""}${acc.status === "Closed" ? " closed" : ""}`}
-              aria-current={current ? "page" : undefined}
+              icon="account"
+              className={`nav-leaf${acc.status === "Closed" ? " closed" : ""}`}
+              active={current}
               onClick={() => onOpenAccount(acc.account_id)}
             >
               {acc.name}
               {docs.length > 0 ? <span className="count">{docs.length}</span> : null}
-            </button>
+            </NavButton>
           );
         })}
     </div>
