@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dashboard } from "./Dashboard";
 import { Register } from "./Register";
 import { Managers } from "./Managers";
@@ -30,6 +30,63 @@ import type {
 const MANAGERS: ManagerId[] = ["payees", "categories", "tags", "currencies", "fields"];
 const SOON = [] as const;
 
+function commandShortcut(): string {
+  if (typeof navigator === "undefined") return "Ctrl+K";
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = nav.userAgentData?.platform || navigator.platform || "";
+  return /mac|iphone|ipad|ipod/i.test(platform) ? "⌘K" : "Ctrl+K";
+}
+
+function viewTitle(
+  view: View,
+  dash: DashboardData | null,
+  locale: Locale,
+  t: (key: MessageKey) => string,
+): string {
+  switch (view.kind) {
+    case "home":
+      return t("home");
+    case "quickadd":
+      return t("quickAdd");
+    case "all":
+      return t("allTransactions");
+    case "favorites":
+      return t("favorites");
+    case "scheduled":
+      return t("scheduled");
+    case "budgets":
+      return t("budgets");
+    case "reports":
+      return t("reports");
+    case "stocks":
+      return t("stocks");
+    case "assets":
+      return t("assets");
+    case "tools":
+      return t("tools");
+    case "settings":
+      return t("settings");
+    case "recon":
+    case "reconDoc":
+      return t("recon");
+    case "account": {
+      const name = dash?.accounts.find((a) => a.account_id === view.accountId)?.name;
+      return name ?? `#${view.accountId}`;
+    }
+    case "type": {
+      const group = dash?.groups.find((g) => g.account_type === view.accountType);
+      if (!group) return view.accountType;
+      return locale === "en" ? group.label_en : group.label_fr;
+    }
+    case "manager":
+      return t(view.id);
+    case "soon":
+      return t(view.id as MessageKey);
+    default:
+      return t("home");
+  }
+}
+
 export default function App() {
   const [locale, setLocale] = useState<Locale>(() => readLocale("fr"));
   const [booting, setBooting] = useState(true);
@@ -49,6 +106,8 @@ export default function App() {
     }
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [barMenu, setBarMenu] = useState(false);
+  const barMenuRef = useRef<HTMLDivElement>(null);
   const [newTxnNonce, setNewTxnNonce] = useState(0);
   const [theme, setTheme] = useState<ThemePref>(() => readTheme());
   const [showClosed, setShowClosed] = useState(false);
@@ -81,6 +140,7 @@ export default function App() {
   const go = useCallback((next: View) => {
     setView(next);
     setNavOpen(false);
+    setBarMenu(false);
     const path = viewToPath(next);
     if (typeof window !== "undefined" && window.location.pathname !== path) {
       window.history.pushState(null, "", path);
@@ -168,6 +228,7 @@ export default function App() {
   }, [booting]);
 
   async function onYieldLock() {
+    if (!window.confirm(t("confirmYieldLock"))) return;
     setLockMsg(null);
     try {
       await api.post("/api/lock/release");
@@ -235,11 +296,23 @@ export default function App() {
         setPaletteOpen(false);
         setNavOpen(false);
         setAccountEdit(null);
+        setBarMenu(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    if (!barMenu) return;
+    function onPointer(event: MouseEvent) {
+      const node = event.target as Node | null;
+      if (node && barMenuRef.current?.contains(node)) return;
+      setBarMenu(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, [barMenu]);
 
   const commands: PaletteCommand[] = useMemo(() => {
     if (!dash) return [];
@@ -373,7 +446,7 @@ export default function App() {
         <button
           type="button"
           className="nav-backdrop"
-          aria-label={t("openMenu")}
+          aria-label={t("closeMenu")}
           onClick={() => setNavOpen(false)}
         />
       )}
@@ -538,10 +611,67 @@ export default function App() {
           <button type="button" className="menu-btn" onClick={() => setNavOpen(true)}>
             {t("openMenu")}
           </button>
-          <button type="button" className="ghost palette-btn" onClick={() => setPaletteOpen(true)}>
-            {t("commandPalette")}
-            <span className="kbd-hint"> ⌘K</span>
+          <h1 className="view-title">{viewTitle(view, dash, locale, t)}</h1>
+          <button
+            type="button"
+            className="palette-field"
+            onClick={() => {
+              setBarMenu(false);
+              setPaletteOpen(true);
+            }}
+          >
+            <span>{t("paletteHint")}</span>
+            <kbd className="kbd-hint">{commandShortcut()}</kbd>
           </button>
+          <div className="bar-menu" ref={barMenuRef}>
+            <button
+              type="button"
+              className="ghost"
+              aria-haspopup="menu"
+              aria-expanded={barMenu}
+              aria-label={t("barMenu")}
+              onClick={() => setBarMenu((open) => !open)}
+            >
+              {locale === "fr" ? "FR" : "EN"}
+            </button>
+            {barMenu && (
+              <div className="bar-menu-pop" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    changeLocale(locale === "fr" ? "en" : "fr");
+                    setBarMenu(false);
+                  }}
+                >
+                  {locale === "fr" ? "English" : "Français"}
+                </button>
+                {health?.lock.acquired ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setBarMenu(false);
+                      void onYieldLock();
+                    }}
+                  >
+                    {t("yieldLock")}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setBarMenu(false);
+                      void onTakeLock();
+                    }}
+                  >
+                    {t("takeLock")}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </header>
 
         {view.kind === "home" && dash && (
@@ -647,39 +777,6 @@ export default function App() {
         )}
       </main>
 
-      <footer className="status">
-        <span>
-          {t("appName")} {health?.version ?? ""}
-        </span>
-        <span>
-          {t("schema")} {health?.db.user_version ?? "—"}
-        </span>
-        <span>
-          {t("lockHeld")}:{" "}
-          {health?.lock.acquired
-            ? health.lock.holder
-            : health?.lock.read_only
-              ? t("readOnly")
-              : "—"}
-        </span>
-        {health?.lock.acquired ? (
-          <button type="button" className="ghost" onClick={() => void onYieldLock()}>
-            {t("yieldLock")}
-          </button>
-        ) : (
-          <button type="button" className="ghost" onClick={() => void onTakeLock()}>
-            {t("takeLock")}
-          </button>
-        )}
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => changeLocale(locale === "fr" ? "en" : "fr")}
-        >
-          {locale === "fr" ? "EN" : "FR"}
-        </button>
-      </footer>
-
       {accountEdit != null && (
         <div className="drawer">
           <AccountEditor
@@ -774,7 +871,7 @@ function NavGroup({
           type="button"
           className="nav-twist"
           aria-expanded={open}
-          aria-label={label}
+          aria-label={`${open ? t("collapseGroup") : t("expandGroup")} ${label}`}
           onClick={onToggle}
         >
           {open ? "▾" : "▸"}

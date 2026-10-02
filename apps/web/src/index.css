@@ -102,10 +102,8 @@ body {
   max-width: 100%;
   display: grid;
   grid-template-columns: 16.5rem minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
-  grid-template-areas:
-    "nav main"
-    "status status";
+  grid-template-rows: 1fr;
+  grid-template-areas: "nav main";
 }
 
 .shell.nav-folded {
@@ -218,18 +216,93 @@ body {
 .main-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
   min-height: 2.4rem;
 }
 
-.main-bar .menu-btn {
-  margin-right: auto;
+.view-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.15rem;
+  font-weight: 650;
 }
 
-.palette-btn {
+.palette-field {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: 1 1 14rem;
+  min-width: 0;
+  max-width: 22rem;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.palette-field span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-field:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ok) 70%, var(--text));
+  outline-offset: 2px;
+}
+
+.kbd-hint {
+  flex: none;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  color: var(--muted);
+}
+
+.bar-menu {
+  position: relative;
+  flex: none;
+}
+
+.bar-menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 14;
+  min-width: 14rem;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.35rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 35%);
+}
+
+.bar-menu-pop button {
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+}
+
+.bar-menu-pop button:hover,
+.bar-menu-pop button:focus-visible {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .menu-btn {
@@ -242,23 +315,10 @@ body {
   background: transparent;
 }
 
-.status {
-  grid-area: status;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.1rem;
-  align-items: center;
-  border-top: 1px solid var(--line);
-  padding: 0.4rem 0.9rem;
-  font-size: 0.82rem;
-  color: var(--muted);
-  background: var(--panel);
-}
-
 .fab {
   position: fixed;
   right: 1rem;
-  bottom: 3.4rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom));
   z-index: 12;
   display: none;
   background: color-mix(in srgb, var(--ok) 22%, var(--panel));
@@ -335,7 +395,11 @@ body {
   background: transparent;
   color: var(--text);
   padding: 0.85rem 1rem;
-  outline: none;
+}
+
+.palette input:focus {
+  outline: 2px solid color-mix(in srgb, var(--ok) 70%, var(--text));
+  outline-offset: -2px;
 }
 
 .palette ul {
@@ -751,7 +815,7 @@ body {
   position: fixed;
   top: 0;
   right: 0;
-  bottom: 2.2rem;
+  bottom: 0;
   left: auto;
   width: min(26rem, 100vw);
   max-width: 100vw;
@@ -1569,11 +1633,11 @@ h2 {
     min-height: 3rem;
     padding: 0.75rem 1.1rem;
     right: max(1rem, env(safe-area-inset-right));
-    bottom: calc(3.2rem + env(safe-area-inset-bottom));
+    bottom: calc(1rem + env(safe-area-inset-bottom));
   }
 
   .main {
-    padding: 0.75rem 0.8rem calc(5.5rem + env(safe-area-inset-bottom));
+    padding: 0.75rem 0.8rem calc(4.8rem + env(safe-area-inset-bottom));
     overflow-x: hidden;
   }
 
@@ -1609,12 +1673,6 @@ h2 {
 
   .split-row select {
     grid-column: auto;
-  }
-
-  .status {
-    gap: 0.45rem 0.7rem;
-    font-size: 0.75rem;
-    padding-bottom: calc(0.4rem + env(safe-area-inset-bottom));
   }
 
   .form-capture > label,
@@ -1691,9 +1749,7 @@ h2 {
   .shell,
   .shell.nav-folded {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "main"
-      "status";
+    grid-template-areas: "main";
   }
 
   .shell.nav-folded .nav {
@@ -1790,6 +1846,10 @@ h2 {
 
   .main-bar {
     gap: 0.45rem;
+  }
+
+  .palette-field {
+    max-width: none;
   }
 }
 

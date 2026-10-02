@@ -109,6 +109,12 @@ export const STRINGS = {
     readOnly: "lecture seule",
     yieldLock: "Céder le verrou",
     takeLock: "Prendre le verrou",
+    confirmYieldLock:
+      "Céder le verrou d’écriture ? L’autre application pourra modifier le livre.",
+    closeMenu: "Fermer",
+    collapseGroup: "Replier",
+    expandGroup: "Déplier",
+    barMenu: "Langue et verrou",
     lockReadOnlyHint:
       "Lecture seule : un autre processus détient l’écriture (réconciliation ou desktop). Cédez-le là-bas, ou reprenez-le ici.",
     netWorth: "Patrimoine (comptes ouverts)",
@@ -471,6 +477,11 @@ export const STRINGS = {
     readOnly: "read only",
     yieldLock: "Yield lock",
     takeLock: "Take lock",
+    confirmYieldLock: "Yield the write lock? The other app will be able to change the ledger.",
+    closeMenu: "Close",
+    collapseGroup: "Collapse",
+    expandGroup: "Expand",
+    barMenu: "Language and lock",
     lockReadOnlyHint:
       "Read only: another process holds the writer lock (reconciliation or desktop). Yield it there, or take it back here.",
     netWorth: "Net worth (open accounts)",
