@@ -227,15 +227,7 @@ export function Register({
   return (
     <div className="register">
       <header className="register-head">
-        <h2
-          onContextMenu={(e) => {
-            if (!onEditAccount) return;
-            e.preventDefault();
-            onEditAccount();
-          }}
-        >
-          {accountName}
-        </h2>
+        <h2>{accountName}</h2>
         <div className="register-actions">
           {onEditAccount && (
             <button type="button" className="ghost" onClick={onEditAccount}>
@@ -283,9 +275,16 @@ export function Register({
           {t("statementLock")} ≤ {account?.statement_date?.slice(0, 10)}
         </p>
       )}
-      {!allAccounts && <CustomFields refType="Bank Account" refId={accountId} t={t} />}
+      {!allAccounts && (
+        <details className="fold">
+          <summary>{t("customFields")}</summary>
+          <CustomFields refType="Bank Account" refId={accountId} t={t} />
+        </details>
+      )}
 
-      <form className="mgr-form filter-bar" onSubmit={applyDraft}>
+      <details className="fold">
+        <summary>{t("filters")}</summary>
+        <form className="mgr-form filter-bar" onSubmit={applyDraft}>
         <label>
           {t("dateFrom")}
           <input
@@ -400,6 +399,13 @@ export function Register({
             {t("clearFilter")}
           </button>
         </div>
+        </form>
+      </details>
+      <div className="register-tools">
+        <p className="k">
+          {total} {t("matching")}
+          {accountTotal !== total ? ` / ${accountTotal}` : ""}
+        </p>
         <label>
           {t("savedViews")}
           <select
@@ -421,21 +427,15 @@ export function Register({
             ))}
           </select>
         </label>
-        <div className="mgr-actions">
-          <button type="button" className="ghost" onClick={() => void saveCurrentView()}>
-            {t("saveView")}
+        <button type="button" className="ghost" onClick={() => void saveCurrentView()}>
+          {t("saveView")}
+        </button>
+        {viewId !== "" && (
+          <button type="button" className="ghost danger" onClick={() => void removeView()}>
+            {t("deleteView")}
           </button>
-          {viewId !== "" && (
-            <button type="button" className="ghost danger" onClick={() => void removeView()}>
-              {t("deleteView")}
-            </button>
-          )}
-        </div>
-      </form>
-      <p className="k">
-        {total} {t("matching")}
-        {accountTotal !== total ? ` / ${accountTotal}` : ""}
-      </p>
+        )}
+      </div>
 
       {error && <p className="error-text">{error}</p>}
       <div className="register-table-wrap">
@@ -507,9 +507,10 @@ export function Register({
                       e.stopPropagation();
                       void cycleStatus(row.trans_id);
                     }}
+                    aria-label={t(STATUS_LABEL[row.status] ?? "statusNone")}
                     title={t(STATUS_LABEL[row.status] ?? "statusNone")}
                   >
-                    {row.status || "·"}
+                    {t(STATUS_LABEL[row.status] ?? "statusNone")}
                   </button>
                 </td>
                 <td className="col-extra">{row.transaction_number}</td>
