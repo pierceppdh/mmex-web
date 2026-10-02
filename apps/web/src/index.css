@@ -106,29 +106,6 @@ body {
   grid-template-areas: "nav main";
 }
 
-.shell.nav-folded {
-  grid-template-columns: 2.75rem minmax(0, 1fr);
-}
-
-.shell.nav-folded .nav {
-  padding: 0.45rem 0.2rem;
-  overflow: hidden;
-}
-
-.shell.nav-folded .nav > *:not(.nav-brand) {
-  display: none;
-}
-
-.shell.nav-folded .nav-brand {
-  flex-direction: column;
-  padding: 0.2rem 0;
-}
-
-.shell.nav-folded .nav-brand strong,
-.shell.nav-folded .nav-close {
-  display: none;
-}
-
 .nav {
   grid-area: nav;
   background: color-mix(in srgb, var(--panel) 80%, #000);
@@ -145,24 +122,6 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 0.4rem 0.55rem 0.8rem;
-}
-
-.nav-fold {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  min-height: 2rem;
-  background: none;
-  border: 0;
-  color: var(--text);
-  font-size: 1.25rem;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.nav-fold:hover {
-  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .nav-close {
@@ -197,9 +156,14 @@ body {
   cursor: pointer;
 }
 
-.nav-item:hover,
-.nav-item.active {
+.nav-item:hover {
   background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.nav-item.active,
+.nav-item.active:hover {
+  background: color-mix(in srgb, var(--ok) 28%, transparent);
+  font-weight: 650;
 }
 
 .nav-item.dim {
@@ -1746,32 +1710,9 @@ h2 {
 }
 
 @media (max-width: 860px) {
-  .shell,
-  .shell.nav-folded {
+  .shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "main";
-  }
-
-  .shell.nav-folded .nav {
-    padding: 0.8rem 0.55rem 1.5rem;
-    overflow: auto;
-  }
-
-  .shell.nav-folded .nav > *:not(.nav-brand) {
-    display: unset;
-  }
-
-  .shell.nav-folded .nav-brand {
-    flex-direction: row;
-    padding: 0.4rem 0.55rem 0.8rem;
-  }
-
-  .shell.nav-folded .nav-brand strong {
-    display: inline;
-  }
-
-  .nav-fold {
-    display: none;
   }
 
   .nav {
@@ -1872,27 +1813,6 @@ h2 {
 
 body:has(.drawer) {
   overflow: hidden;
-}
-
-.nav-leaf-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0 0.35rem 0.25rem 1.35rem;
-}
-
-.nav-leaf-wrap > .nav-item {
-  padding-left: 0.35rem;
-}
-
-.nav-stmt {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.nav-stmt select {
-  width: 100%;
-  font-size: 0.78rem;
 }
 
 .recon-page {

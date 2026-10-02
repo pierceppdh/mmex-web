@@ -98,13 +98,6 @@ export default function App() {
     typeof window !== "undefined" ? pathToView(window.location.pathname) : { kind: "home" },
   );
   const [navOpen, setNavOpen] = useState(false);
-  const [navFolded, setNavFolded] = useState(() => {
-    try {
-      return localStorage.getItem("mmex-nav-folded") === "1";
-    } catch {
-      return false;
-    }
-  });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [barMenu, setBarMenu] = useState(false);
   const barMenuRef = useRef<HTMLDivElement>(null);
@@ -120,7 +113,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
-    return { favorites: true };
+    return {};
   });
 
   const t = useCallback((key: MessageKey) => STRINGS[locale][key], [locale]);
@@ -162,9 +155,8 @@ export default function App() {
     const acc = dash.accounts.find((a) => a.account_id === view.accountId);
     if (!acc) return;
     setOpenNav((prev) => {
-      if (prev[acc.account_type] && (!acc.favorite || prev.favorites)) return prev;
+      if (prev[acc.account_type]) return prev;
       const next = { ...prev, [acc.account_type]: true };
-      if (acc.favorite) next.favorites = true;
       try {
         localStorage.setItem("mmex-nav-open", JSON.stringify(next));
       } catch {
@@ -439,7 +431,7 @@ export default function App() {
 
   return (
     <div
-      className={`shell${navOpen ? " nav-open" : ""}${navFolded ? " nav-folded" : ""}`}
+      className={`shell${navOpen ? " nav-open" : ""}`}
       lang={locale}
     >
       {navOpen && (
@@ -453,29 +445,11 @@ export default function App() {
       <aside className="nav">
         <div className="nav-brand">
           <strong>{t("appName")}</strong>
-          <button
-            type="button"
-            className="nav-fold"
-            aria-label={navFolded ? t("expandMenu") : t("foldMenu")}
-            title={navFolded ? t("expandMenu") : t("foldMenu")}
-            onClick={() => {
-              setNavFolded((prev) => {
-                const next = !prev;
-                try {
-                  localStorage.setItem("mmex-nav-folded", next ? "1" : "0");
-                } catch {
-                  /* ignore */
-                }
-                return next;
-              });
-            }}
-          >
-            {navFolded ? "›" : "‹"}
-          </button>
           <button type="button" className="nav-close" onClick={() => setNavOpen(false)}>
             ×
           </button>
         </div>
+        <div className="nav-label">{t("navDaily")}</div>
         <NavButton active={view.kind === "home"} onClick={() => go({ kind: "home" })}>
           {t("home")}
         </NavButton>
@@ -488,26 +462,16 @@ export default function App() {
         <NavButton active={view.kind === "all"} onClick={() => go({ kind: "all" })}>
           {t("allTransactions")}
         </NavButton>
-        <NavGroup
-          id="favorites"
-          label={t("favorites")}
-          count={dash?.favorites.length ?? 0}
-          accounts={dash?.favorites ?? []}
-          open={Boolean(openNav.favorites)}
+        <NavButton
           active={view.kind === "favorites"}
-          activeAccountId={view.kind === "account" ? view.accountId : undefined}
-          onToggle={() => toggleNav("favorites")}
-          onOpenGroup={() => go({ kind: "favorites" })}
-          onOpenAccount={(id) => go({ kind: "account", accountId: id })}
-          statements={reconInbox?.by_account}
-          t={t}
-          onOpenStatement={(_accountId, docId) => go({ kind: "reconDoc", docId })}
-        />
-        <div className="nav-label">{locale === "en" ? "Accounts" : "Comptes"}</div>
+          onClick={() => go({ kind: "favorites" })}
+        >
+          {t("favorites")}
+          <span className="count">{dash?.favorites.length ?? 0}</span>
+        </NavButton>
         {navGroups.map((g) => (
           <NavGroup
             key={g.account_type}
-            id={g.account_type}
             label={locale === "en" ? g.label_en : g.label_fr}
             count={g.count}
             accounts={g.accounts}
@@ -519,7 +483,6 @@ export default function App() {
             onOpenAccount={(id) => go({ kind: "account", accountId: id })}
             statements={reconInbox?.by_account}
             t={t}
-            onOpenStatement={(_accountId, docId) => go({ kind: "reconDoc", docId })}
           />
         ))}
         <NavButton
@@ -531,6 +494,7 @@ export default function App() {
             <span className="count">{reconInbox.documents.length}</span>
           ) : null}
         </NavButton>
+        <div className="nav-label">{t("navFollow")}</div>
         <NavButton
           active={view.kind === "scheduled"}
           onClick={() => go({ kind: "scheduled" })}
@@ -561,6 +525,7 @@ export default function App() {
         >
           {t("assets")}
         </NavButton>
+        <div className="nav-label">{t("navSettings")}</div>
         <NavButton
           active={view.kind === "tools"}
           onClick={() => go({ kind: "tools" })}
@@ -573,7 +538,6 @@ export default function App() {
         >
           {t("settings")}
         </NavButton>
-        <div className="nav-label">{t("managers")}</div>
         {MANAGERS.map((id) => (
           <NavButton
             key={id}
@@ -829,6 +793,7 @@ function NavButton({
     <button
       type="button"
       className={`nav-item${active ? " active" : ""}${dim ? " dim" : ""}`}
+      aria-current={active ? "page" : undefined}
       onClick={onClick}
     >
       {children}
@@ -848,9 +813,7 @@ function NavGroup({
   onOpenAccount,
   statements,
   t,
-  onOpenStatement,
 }: {
-  id: string;
   label: string;
   count: number;
   accounts: { account_id: number; name: string; status: string }[];
@@ -860,9 +823,8 @@ function NavGroup({
   onToggle: () => void;
   onOpenGroup: () => void;
   onOpenAccount: (id: number) => void;
-  statements?: Record<string, { id: number; title: string; original_file_name: string }[]>;
+  statements?: Record<string, { id: number }[]>;
   t: (key: MessageKey) => string;
-  onOpenStatement: (accountId: number, docId: number) => void;
 }) {
   return (
     <div className="nav-tree">
@@ -884,37 +846,18 @@ function NavGroup({
       {open &&
         accounts.map((acc) => {
           const docs = statements?.[String(acc.account_id)] ?? [];
+          const current = activeAccountId === acc.account_id;
           return (
-            <div key={acc.account_id} className="nav-leaf-wrap">
-              <button
-                type="button"
-                className={`nav-item nav-leaf${activeAccountId === acc.account_id ? " active" : ""}${acc.status === "Closed" ? " closed" : ""}`}
-                onClick={() => onOpenAccount(acc.account_id)}
-              >
-                {acc.name}
-                {docs.length > 0 ? <span className="count">{docs.length}</span> : null}
-              </button>
-              {docs.length > 0 && (
-                <label className="nav-stmt">
-                  {t("reconPickStatement")}
-                  <select
-                    defaultValue=""
-                    onChange={(e) => {
-                      const id = Number(e.target.value);
-                      if (id) onOpenStatement(acc.account_id, id);
-                      e.target.value = "";
-                    }}
-                  >
-                    <option value="">{t("reconPickStatement")}</option>
-                    {docs.map((doc) => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.title || doc.original_file_name || `#${doc.id}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
+            <button
+              key={acc.account_id}
+              type="button"
+              className={`nav-item nav-leaf${current ? " active" : ""}${acc.status === "Closed" ? " closed" : ""}`}
+              aria-current={current ? "page" : undefined}
+              onClick={() => onOpenAccount(acc.account_id)}
+            >
+              {acc.name}
+              {docs.length > 0 ? <span className="count">{docs.length}</span> : null}
+            </button>
           );
         })}
     </div>
