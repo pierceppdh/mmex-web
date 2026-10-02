@@ -447,7 +447,22 @@ body {
 
 .hero-nets {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.2rem;
+}
+
+.hero-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.25rem;
+  margin: 0.35rem 0 0.15rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.hero-sub strong {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .group-total {
@@ -457,26 +472,20 @@ body {
   font-size: 0.9rem;
 }
 
-.acct-balances {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(5.5rem, auto));
-  gap: 0.65rem 1rem;
-  text-align: right;
-  flex: 0 0 auto;
-}
-
-.amt-cell {
+.acct-figure {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.1rem;
-  min-width: 0;
+  flex: 0 0 auto;
+  text-align: right;
 }
 
-.amt-cell .k {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+.acct-diff {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .summary-list .amt {
@@ -1198,10 +1207,14 @@ h2 {
   padding: 0.8rem 0.95rem;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
   color: inherit;
   cursor: pointer;
   min-height: 4.4rem;
+}
+
+.home-action:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .home-action strong {
@@ -1209,8 +1222,18 @@ h2 {
 }
 
 .home-action.primary {
-  border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
-  background: color-mix(in srgb, var(--ok) 12%, var(--panel));
+  border-color: transparent;
+  background: var(--ok);
+  color: var(--bg);
+}
+
+.home-action.primary:hover {
+  background: color-mix(in srgb, var(--ok) 88%, var(--text));
+}
+
+.home-action.primary .k {
+  color: inherit;
+  opacity: 0.8;
 }
 
 .nav-tree {
@@ -1250,7 +1273,7 @@ h2 {
 }
 
 .net {
-  font-size: 1.8rem;
+  font-size: 2.15rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1551,23 +1574,9 @@ h2 {
     align-items: flex-start;
   }
 
-  .acct-balances {
-    grid-template-columns: 1fr;
-    text-align: left;
-    width: 100%;
-  }
-
-  .amt-cell {
-    align-items: flex-start;
-    flex-direction: row;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
   .account-link {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.45rem;
+    align-items: center;
+    gap: 0.75rem;
   }
 
   .home-actions {

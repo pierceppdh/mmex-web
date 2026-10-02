@@ -46,26 +46,26 @@ export function Dashboard({
       ? source.filter((g) => g.account_type === groupFilter)
       : source;
 
+  const favoritesWorth = dash.net_worth_favorites_formatted ?? dash.net_worth_formatted;
+
   return (
     <>
       {!groupFilter && (
         <section className="hero">
           <div className="hero-nets">
+            <div className="k">{favoritesOnly ? t("netWorthFavorites") : t("netWorth")}</div>
+            <div className="net">{favoritesOnly ? favoritesWorth : dash.net_worth_formatted}</div>
             {!favoritesOnly && (
-              <div>
-                <div className="k">{t("netWorth")}</div>
-                <div className="net">{dash.net_worth_formatted}</div>
-              </div>
-            )}
-            <div>
-              <div className="k">{t("netWorthFavorites")}</div>
-              <div className="net">{dash.net_worth_favorites_formatted ?? dash.net_worth_formatted}</div>
-            </div>
-            {!favoritesOnly && dash.net_worth_favorites_als_formatted && (
-              <div>
-                <div className="k">{t("netWorthFavoritesAls")}</div>
-                <div className="net">{dash.net_worth_favorites_als_formatted}</div>
-              </div>
+              <p className="hero-sub">
+                <span>
+                  {t("netWorthFavorites")} <strong>{favoritesWorth}</strong>
+                </span>
+                {dash.net_worth_favorites_als_formatted ? (
+                  <span>
+                    {t("netWorthFavoritesAls")} <strong>{dash.net_worth_favorites_als_formatted}</strong>
+                  </span>
+                ) : null}
+              </p>
             )}
             <div className="k">
               {dash.base_currency
@@ -119,16 +119,8 @@ export function Dashboard({
                     {g.total_formatted ?? ""} <span className="k">({g.count})</span>
                   </span>
                 </div>
-                {g.account_type === "Asset" && (
+                {g.account_type === "Asset" && (g.items?.length ?? 0) > 0 && (
                   <ul className="asset-items">
-                    {(g.accounts ?? []).map((acc) => (
-                      <li key={`acc-${acc.account_id}`}>
-                        <button type="button" className="account-link" onClick={() => onOpenAccount(acc.account_id)}>
-                          <span className="name">{acc.name}</span>
-                          <span className="amt">{acc.display_formatted}</span>
-                        </button>
-                      </li>
-                    ))}
                     {(g.items ?? []).map((item) => (
                       <li key={`ast-${item.asset_id}`}>
                         {onOpenAssets ? (
@@ -169,6 +161,12 @@ export function Dashboard({
       ))}
     </>
   );
+}
+
+function differenceIsZero(acc: Account): boolean {
+  if (acc.difference == null || acc.difference === "") return true;
+  const value = Number(acc.difference);
+  return !Number.isFinite(value) || value === 0;
 }
 
 function AccountList({
@@ -216,19 +214,13 @@ function AccountList({
                 <span className="closed-tag">{t("closedBadge")}</span>
               ) : null}
             </span>
-            <span className="acct-balances">
-              <span className="amt-cell">
-                <span className="k">{t("actualBalance")}</span>
-                <span className="amt">{acc.display_formatted}</span>
-              </span>
-              <span className="amt-cell">
-                <span className="k">{t("reconBalance")}</span>
-                <span className="amt">{acc.reconciled_formatted ?? "—"}</span>
-              </span>
-              <span className="amt-cell">
-                <span className="k">{t("reconDifference")}</span>
-                <span className="amt">{acc.difference_formatted ?? "—"}</span>
-              </span>
+            <span className="acct-figure">
+              <span className="amt">{acc.display_formatted}</span>
+              {!differenceIsZero(acc) && acc.difference_formatted ? (
+                <span className="acct-diff">
+                  {t("reconDifference")} {acc.difference_formatted}
+                </span>
+              ) : null}
             </span>
           </button>
           {onEdit && (

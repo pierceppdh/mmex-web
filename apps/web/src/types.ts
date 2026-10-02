@@ -32,6 +32,7 @@ export type Account = {
   currency_symbol: string | null;
   display_formatted: string;
   reconciled_formatted?: string;
+  difference?: string;
   difference_formatted?: string;
   statement_locked?: number;
   statement_date?: string | null;
