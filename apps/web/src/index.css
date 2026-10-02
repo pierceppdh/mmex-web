@@ -492,7 +492,7 @@ body {
   text-align: right;
 }
 
-.summary-group {
+.accounts li.summary-group {
   display: block;
   padding: 0.55rem 0;
 }
