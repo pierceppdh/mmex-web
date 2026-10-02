@@ -10,16 +10,19 @@
     <title>MMEX Web</title>
     <script>
       (function () {
+        var dark = true;
         try {
           var p = localStorage.getItem("mmex-theme") || "system";
-          var dark =
+          dark =
             p === "dark" ||
             (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.dataset.theme = dark ? "dark" : "light";
-          document.documentElement.style.colorScheme = dark ? "dark" : "light";
         } catch (e) {
-          document.documentElement.dataset.theme = "dark";
+          dark = true;
         }
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", dark ? "#10141c" : "#f4f6fb");
       })();
     </script>
   </head>

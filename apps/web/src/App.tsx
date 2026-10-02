@@ -187,7 +187,9 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
+  const start = useCallback(() => {
+    setError(null);
+    setBooting(true);
     api
       .get<{ locale_default: string }>("/api/info")
       .then((info) => {
@@ -207,6 +209,10 @@ export default function App() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setBooting(false));
   }, [loadLedger]);
+
+  useEffect(() => {
+    start();
+  }, [start]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -331,14 +337,26 @@ export default function App() {
     return list;
   }, [dash, locale, t, view, health, go, showClosed, reconInbox]);
 
-  if (error) {
+  if (error || booting) {
     return (
-      <p className="error-text" style={{ padding: "2rem" }}>
-        {t("apiDown")} : {error}
-      </p>
+      <div className="boot" lang={locale}>
+        <div className="boot-card">
+          {error ? (
+            <>
+              <p className="error-text">
+                {t("apiDown")} : {error}
+              </p>
+              <button type="button" onClick={() => start()}>
+                {t("retry")}
+              </button>
+            </>
+          ) : (
+            <p className="k">{t("loading")}</p>
+          )}
+        </div>
+      </div>
     );
   }
-  if (booting) return <p className="k" style={{ padding: "2rem" }}>{t("loading")}</p>;
 
   const selectedAccount =
     view.kind === "account"

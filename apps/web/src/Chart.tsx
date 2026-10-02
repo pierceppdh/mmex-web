@@ -35,7 +35,7 @@ export function Chart({
         height,
         background: "transparent",
         toolbar: { show: false },
-        fontFamily: "IBM Plex Sans, Segoe UI, system-ui, sans-serif",
+        fontFamily: "system-ui, sans-serif",
       },
       theme: { mode },
       colors: mode === "light"

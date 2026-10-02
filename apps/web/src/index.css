@@ -9,7 +9,7 @@ html[data-theme="dark"] {
   --warn: #f5c84c;
   --err: #ff6b6b;
   --line: #2a3548;
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 
 html[data-theme="light"] {
@@ -45,6 +45,36 @@ body {
   max-width: 52rem;
   margin: 0 auto;
   padding: 2rem 1.25rem 4rem;
+}
+
+.boot {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.boot-card {
+  width: min(24rem, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 0.85rem;
+  text-align: center;
+}
+
+.boot-card p {
+  margin: 0;
+}
+
+.boot-card button {
+  cursor: pointer;
+  background: color-mix(in srgb, var(--ok) 18%, var(--panel));
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--line));
+  border-radius: 8px;
+  padding: 0.55rem 0.95rem;
+  font-weight: 650;
 }
 
 button,
