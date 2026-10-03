@@ -138,6 +138,10 @@ class PostFinanceParser(BaseParser):
             rf"^ACHAT/SERVICE DU\s+(\d{{2}}\.\d{{2}}\.\d{{4}})\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
             rf"^(\d{{2}}\.\d{{2}}\.\d{{2}})\s+PRIX POUR\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
             rf"^PRIX POUR\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
+            rf"^(\d{{2}}\.\d{{2}}\.\d{{2}})\s+TRANSFERT DU COMPTE\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
+            rf"^TRANSFERT DU COMPTE\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
+            rf"^(\d{{2}}\.\d{{2}}\.\d{{2}})\s+ENVOI D'ARGENT TWINT DU\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
+            rf"^ENVOI D'ARGENT TWINT DU\s+({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}}){_OPTIONAL_BALANCE}$",
             rf"^(\d{{2}}\.\d{{2}}\.\d{{2}})\s+BOUCLEMENT DES INTERETS.*?({_AMOUNT})\s+(\d{{2}}\.\d{{2}}\.\d{{2}})$",
         ]
         for pattern in patterns:
@@ -191,6 +195,28 @@ class PostFinanceParser(BaseParser):
                 value_date = self.parse_date(match.group(2))
                 tx_date = value_date
             return tx_date, amount, True, value_date, label
+
+        if "ENVOI D'ARGENT TWINT" in line:
+            if re.match(r"\d{2}\.\d{2}\.\d{2}", match.group(1)):
+                tx_date = self.parse_date(match.group(1))
+                amount = self.parse_amount(match.group(2))
+                value_date = self.parse_date(match.group(3))
+            else:
+                amount = self.parse_amount(match.group(1))
+                value_date = self.parse_date(match.group(2))
+                tx_date = value_date
+            return tx_date, amount, False, value_date, "ENVOI D'ARGENT TWINT"
+
+        if "TRANSFERT DU COMPTE" in line:
+            if re.match(r"\d{2}\.\d{2}\.\d{2}", match.group(1)):
+                tx_date = self.parse_date(match.group(1))
+                amount = self.parse_amount(match.group(2))
+                value_date = self.parse_date(match.group(3))
+            else:
+                amount = self.parse_amount(match.group(1))
+                value_date = self.parse_date(match.group(2))
+                tx_date = value_date
+            return tx_date, amount, True, value_date, "TRANSFERT DU COMPTE"
 
         if "PRESTATION TWINT" in line:
             if re.match(r"\d{2}\.\d{2}\.\d{2}", match.group(1)):
@@ -247,6 +273,9 @@ class PostFinanceParser(BaseParser):
             return True
         if re.match(r"^\d{2}\.\d{2}\.\d{2}\s+Etat de compte\s+", line):
             return True
+        # Page header is "Date 01.10.2026", not "Date:".
+        if re.match(r"^Date\s+\d{2}\.\d{2}\.\d{4}$", line):
+            return True
         if re.match(r"^CH[A-Z0-9]{10,}$", line):
             return True
         if re.match(r"^00\.\d{6}$", line):
@@ -276,11 +305,28 @@ class PostFinanceParser(BaseParser):
             if label:
                 description_parts.append(label)
 
+            # After the closing total or the legal footer, leftover wrap
+            # lines are not part of the last movement.
+            closing = False
             while i < len(lines):
                 next_line = lines[i].strip()
-                if self._is_transaction_start(next_line) or self._should_skip_line(next_line):
-                    if self._is_transaction_start(next_line):
-                        break
+                if self._is_transaction_start(next_line):
+                    break
+                if (
+                    description_parts[:1] == ["TRANSFERT DU COMPTE"]
+                    and re.fullmatch(r"CH[A-Z0-9]{10,}", next_line)
+                ):
+                    description_parts.append(next_line)
+                    i += 1
+                    continue
+                if self._should_skip_line(next_line):
+                    if next_line.startswith(
+                        ("Total ", "Veuillez contrôler", "Des informations", "Avec nos meilleures")
+                    ):
+                        closing = True
+                    i += 1
+                    continue
+                if closing:
                     i += 1
                     continue
                 description_parts.append(next_line)
