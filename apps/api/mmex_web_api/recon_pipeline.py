@@ -15,7 +15,7 @@ from sqlalchemy.engine import Engine
 from mmex_domain.recon import list_account_refs, match_statement_account, suggest_account_id
 from mmex_domain.recon_commit import apply_operations
 from mmex_recon.balance import check_pdf_balances
-from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all
+from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all, supplement_foreign_amounts
 from mmex_recon.parsers.registry import registry
 from mmex_recon.schemas import MatchStatus, ParsedStatement, ReconciliationSession, TransactionMatch
 from mmex_web_api.config import Settings
@@ -107,15 +107,33 @@ def build_session(
         payload = {"id": uuid4().hex, **session.model_dump(mode="json")}
         payload["suggested_account_id"] = int(detected["account_id"]) if detected else None
         return payload
-    start = min(t.date for t in txs) - timedelta(days=TOLERANCE_DAYS)
-    end = max(t.date for t in txs) + timedelta(days=TOLERANCE_DAYS)
+    dates = [t.date for t in txs]
+    dates.extend(t.value_date for t in txs if t.value_date)
+    start = min(dates) - timedelta(days=TOLERANCE_DAYS)
+    end = max(dates) + timedelta(days=TOLERANCE_DAYS)
+    credit_card = _credit_card(engine, account_id)
+    account_name = _account_name(engine, account_id)
     mmex = load_candidates(engine, account_id, start, end)
-    matches = match_all(txs, mmex, credit_card=_credit_card(engine, account_id))
+    mmex = supplement_foreign_amounts(
+        engine,
+        account_id,
+        start,
+        end,
+        txs,
+        mmex,
+        credit_card=credit_card,
+    )
+    matches = match_all(
+        txs,
+        mmex,
+        credit_card=credit_card,
+        statement_account_name=account_name,
+    )
     session = ReconciliationSession(
         source=f"paperless:{paperless_id}",
         statement=statement,
         account_id=account_id,
-        account_name=_account_name(engine, account_id),
+        account_name=account_name,
         matches=matches,
         paperless_doc_id=paperless_id,
         balance_check=balance,

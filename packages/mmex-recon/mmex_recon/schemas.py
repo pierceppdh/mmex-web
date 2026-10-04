@@ -168,6 +168,8 @@ class MmexTransaction(BaseModel):
     to_account_id: Optional[int] = None
     counterpart_account_name: Optional[str] = None
     is_inbound_transfer: bool = False
+    # Compte où l'écriture est enregistrée, quand ce n'est pas le compte du relevé.
+    account_name: Optional[str] = None
 
 
 class MatchCandidate(BaseModel):

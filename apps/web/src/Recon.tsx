@@ -15,6 +15,7 @@ type MmexTxn = {
   is_inbound_transfer: boolean;
   counterpart_account_name: string | null;
   category_name: string | null;
+  account_name?: string | null;
 };
 
 type Candidate = {
@@ -350,12 +351,13 @@ function docLabel(doc: ReconDoc): string {
 function mmexLabel(tx: MmexTxn, t: (key: MessageKey) => string): string {
   const date = tx.trans_date.slice(0, 10);
   const amt = tx.amount;
+  const booked = tx.account_name ? ` · ${tx.account_name}` : "";
   if (tx.trans_code === "Transfer" || tx.is_inbound_transfer) {
     const other = tx.counterpart_account_name || tx.payee_name || "—";
     const arrow = tx.is_inbound_transfer ? t("reconInbound") : t("reconOutbound");
-    return `${date} · ${arrow} ${other} · ${amt}`;
+    return `${date} · ${arrow} ${other}${booked} · ${amt}`;
   }
-  return `${date} · ${tx.payee_name || "—"} · ${amt}`;
+  return `${date} · ${tx.payee_name || "—"}${booked} · ${amt}`;
 }
 
 function candidateLabel(c: Candidate, t: (key: MessageKey) => string): string {

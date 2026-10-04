@@ -5,7 +5,12 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine, text
 
-from mmex_recon.matcher import load_candidates, match_all, match_transaction
+from mmex_recon.matcher import (
+    load_candidates,
+    match_all,
+    match_transaction,
+    supplement_foreign_amounts,
+)
 from mmex_recon.schemas import BankTransaction, MatchStatus, MmexTransaction
 from mmex_web_api.recon_pipeline import commit_session
 from tests.conftest import make_mmex_db
@@ -87,6 +92,213 @@ def test_inbound_transfer_uses_to_amount_and_source_name(tmp_path) -> None:
     assert result.status == MatchStatus.AUTO_MATCHED
     assert result.selected_trans_id == 20
     engine.dispose()
+
+
+def test_hyphenated_merchant_matches_payee() -> None:
+    mmex = [
+        MmexTransaction(
+            trans_id=70,
+            account_id=1,
+            payee_name="Coop",
+            trans_code="Withdrawal",
+            amount=Decimal("-6.95"),
+            status="",
+            trans_date=date(2026, 9, 18),
+        )
+    ]
+    bank = BankTransaction(
+        date=date(2026, 9, 18),
+        description="ACHAT/SERVICE CARTE NO XXXX1332 COOP-4680 GLAND EIKENOTT GLAND (CH)",
+        amount=Decimal("-6.95"),
+    )
+    result = match_transaction(bank, mmex)
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.selected_trans_id == 70
+
+
+def test_cler_transfer_booked_on_another_account() -> None:
+    transfer = MmexTransaction(
+        trans_id=80,
+        account_id=33,
+        payee_name=None,
+        trans_code="Transfer",
+        amount=Decimal("-404.80"),
+        status="",
+        trans_date=date(2026, 9, 30),
+        counterpart_account_name="Banque Cler - Zak",
+        account_name="Postfinance Épargne Cécile et Pierre",
+    )
+    other = MmexTransaction(
+        trans_id=81,
+        account_id=3,
+        payee_name="Swisslife",
+        trans_code="Withdrawal",
+        amount=Decimal("-404.80"),
+        status="",
+        trans_date=date(2026, 9, 30),
+        account_name="Banque Cler - Zak",
+    )
+    bank = BankTransaction(
+        date=date(2026, 9, 30),
+        description=(
+            "BANK CLER AG POSTFACH 4002 BASEL PIERROT MAURICE PRUD'HOMME "
+            "CHEMIN DE L'AUBÉPINE 9B 1196 GLAND"
+        ),
+        amount=Decimal("-404.80"),
+    )
+    result = match_all(
+        [bank],
+        [transfer, other],
+        statement_account_name="Postfinance Cécile et Pierre",
+    )[0]
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.selected_trans_id == 80
+
+
+def test_shared_amount_keeps_named_transfer_and_leaves_the_other() -> None:
+    thomas = MmexTransaction(
+        trans_id=90,
+        account_id=1,
+        payee_name=None,
+        trans_code="Transfer",
+        amount=Decimal("-10"),
+        status="",
+        trans_date=date(2026, 9, 7),
+        counterpart_account_name="Yuh Thomas",
+    )
+    ludivine = MmexTransaction(
+        trans_id=91,
+        account_id=1,
+        payee_name=None,
+        trans_code="Transfer",
+        amount=Decimal("-10"),
+        status="",
+        trans_date=date(2026, 9, 7),
+        counterpart_account_name="Yuh Ludivine",
+    )
+    banks = [
+        BankTransaction(
+            date=date(2026, 9, 7),
+            description="ACHAT/PRESTATION TWINT 07.09.2026 G'S CUISINE GILLY (CH)",
+            amount=Decimal("-10"),
+        ),
+        BankTransaction(
+            date=date(2026, 9, 7),
+            description=(
+                "ORDRE PERMANENT: 90- 33665595 SWISSQUOTE BANK SA "
+                "THOMAS PRUD'HOMME 1196 GLAND"
+            ),
+            amount=Decimal("-10"),
+        ),
+    ]
+    twint, standing = match_all(banks, [thomas, ludivine])
+    assert standing.status == MatchStatus.AUTO_MATCHED
+    assert standing.selected_trans_id == 90
+    assert twint.selected_trans_id is None
+    assert twint.status == MatchStatus.FUZZY_MATCHED
+
+
+def test_reconciled_neighbour_is_not_reused() -> None:
+    previous = MmexTransaction(
+        trans_id=100,
+        account_id=1,
+        payee_name=None,
+        trans_code="Transfer",
+        amount=Decimal("-10"),
+        status="R",
+        trans_date=date(2026, 8, 31),
+        counterpart_account_name="Yuh Ludivine",
+    )
+    bank = BankTransaction(
+        date=date(2026, 9, 2),
+        description="ACHAT/PRESTATION TWINT 02.09.2026 G'S CUISINE GILLY (CH)",
+        amount=Decimal("-10"),
+    )
+    result = match_transaction(bank, [previous])
+    assert result.status == MatchStatus.NO_MATCH
+    assert result.selected_trans_id is None
+    assert result.include is True
+    assert result.candidates == []
+
+
+def test_unique_amount_matches_when_the_payee_name_differs() -> None:
+    mmex = [
+        MmexTransaction(
+            trans_id=110,
+            account_id=1,
+            payee_name="Link",
+            trans_code="Withdrawal",
+            amount=Decimal("-50"),
+            status="",
+            trans_date=date(2026, 9, 16),
+        )
+    ]
+    bank = BankTransaction(
+        date=date(2026, 9, 16),
+        description="UBS SWITZERLAND AG RI REALIM SA CH. DE CHAMBÉSY 8 1292 CHAMBÉSY",
+        amount=Decimal("-50"),
+    )
+    result = match_transaction(bank, mmex)
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.selected_trans_id == 110
+
+
+def test_foreign_amount_load_finds_cler_transfer(tmp_path) -> None:
+    db = make_mmex_db(tmp_path / "data.mmb")
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Postfinance Cécile et Pierre", "Checking", "0")
+        _insert_account(conn, 2, "Postfinance Épargne Cécile et Pierre", "Checking", "0")
+        _insert_account(conn, 3, "Banque Cler - Zak", "Checking", "0")
+        _insert_txn(conn, 80, 2, "Transfer", "404.80", to_account_id=3, to_amount="404.80")
+        _insert_txn(conn, 81, 3, "Withdrawal", "404.80")
+    bank = [
+        BankTransaction(
+            date=date(2026, 1, 1),
+            description="BANK CLER AG POSTFACH 4002 BASEL",
+            amount=Decimal("-404.80"),
+        )
+    ]
+    local = load_candidates(engine, 1, date(2026, 1, 1), date(2026, 1, 1))
+    assert local == []
+    merged = supplement_foreign_amounts(
+        engine, 1, date(2026, 1, 1), date(2026, 1, 1), bank, local
+    )
+    engine.dispose()
+    result = match_all(
+        bank,
+        merged,
+        statement_account_name="Postfinance Cécile et Pierre",
+    )[0]
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.selected_trans_id == 80
+    booked = result.candidates[0].mmex_transaction
+    assert booked.account_name == "Postfinance Épargne Cécile et Pierre"
+
+
+def test_card_purchase_with_the_same_shop_stays_unmatched() -> None:
+    card = MmexTransaction(
+        trans_id=120,
+        account_id=6,
+        payee_name="Net viet",
+        trans_code="Withdrawal",
+        amount=Decimal("-15"),
+        status="",
+        trans_date=date(2026, 9, 1),
+        account_name="Visa Cashback",
+    )
+    bank = BankTransaction(
+        date=date(2026, 9, 1),
+        description="ACHAT/PRESTATION TWINT 01.09.2026 NET VIET ORBE (CH)",
+        amount=Decimal("-15"),
+    )
+    result = match_all(
+        [bank],
+        [card],
+        statement_account_name="Postfinance Cécile et Pierre",
+    )[0]
+    assert result.status == MatchStatus.NO_MATCH
+    assert result.selected_trans_id is None
 
 
 def test_outbound_transfer_matches_counterpart_alias() -> None:
