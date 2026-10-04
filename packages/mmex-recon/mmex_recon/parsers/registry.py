@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from mmex_recon.schemas import ParsedStatement
+from mmex_recon.parsers.banque_cler import BanqueClerParser
 from mmex_recon.parsers.base import BaseParser
 from mmex_recon.parsers.boursorama_cb import BoursoramaCbParser
 from mmex_recon.parsers.boursorama_compte import BoursoramaCompteParser
@@ -25,6 +26,7 @@ class ParserRegistry:
             SwissVisaParser(),
             BoursoramaCbParser(),
             BoursoramaCompteParser(),
+            BanqueClerParser(),
             PostFinanceParser(),
             YuhParser(),
         ]

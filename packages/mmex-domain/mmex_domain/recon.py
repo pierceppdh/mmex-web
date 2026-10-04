@@ -26,6 +26,9 @@ KEYWORDS_MAP = {
     "boursobank": "boursorama",
     "postfinance": "postfinance",
     "post finance": "postfinance",
+    "zak": "zak",
+    "banque cler": "banque cler",
+    "bank cler": "banque cler",
 }
 
 CARD_HINTS = (
@@ -90,6 +93,7 @@ def expected_account_type(statement: Any) -> str | None:
         "boursorama_compte",
         "postfinance",
         "yuh",
+        "banque_cler",
     }:
         return "Checking"
     return None
