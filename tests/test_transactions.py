@@ -195,6 +195,54 @@ def test_ledger_all_accounts(authed_client: TestClient, mmex_settings: Settings)
     assert got.json()["account_id"] is None
 
 
+def test_transfer_update_can_change_source_account(
+    authed_client: TestClient, mmex_settings: Settings
+) -> None:
+    _seed(mmex_settings)
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.begin() as conn:
+        _insert_account(conn, 3, "Zak", "Checking", "0")
+    engine.dispose()
+    created = authed_client.post(
+        "/api/transactions",
+        json={
+            "account_id": 1,
+            "trans_code": "Transfer",
+            "trans_amount": "10.00",
+            "to_trans_amount": "10.00",
+            "to_account_id": 2,
+            "trans_date": "2026-05-01",
+            "categ_id": 1,
+        },
+    )
+    assert created.status_code == 200, created.text
+    tid = created.json()["trans_id"]
+    updated = authed_client.put(
+        f"/api/transactions/{tid}",
+        json={
+            "account_id": 3,
+            "trans_code": "Transfer",
+            "trans_amount": "10.00",
+            "to_trans_amount": "10.00",
+            "to_account_id": 2,
+            "trans_date": "2026-05-01",
+            "categ_id": 1,
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["account_id"] == 3
+    assert body["to_account_id"] == 2
+    src = authed_client.get("/api/accounts/1/transactions").json()["transactions"]
+    assert all(row["trans_id"] != tid for row in src)
+    moved = authed_client.get("/api/accounts/3/transactions").json()["transactions"]
+    assert moved[0]["trans_id"] == tid
+    assert moved[0]["withdrawal"] == "10.00" or Decimal(moved[0]["withdrawal"]) == Decimal("10")
+    dest = authed_client.get("/api/accounts/2/transactions").json()["transactions"]
+    assert dest[0]["trans_id"] == tid
+    assert Decimal(dest[0]["deposit"]) == Decimal("10")
+
+
 def test_lookups(authed_client: TestClient, mmex_settings: Settings) -> None:
     _seed(mmex_settings)
     cats = authed_client.get("/api/categories").json()["categories"]

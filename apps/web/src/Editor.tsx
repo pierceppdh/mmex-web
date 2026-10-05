@@ -192,7 +192,7 @@ export function Editor({ accountId, accounts, transId, t, pickAccount, onClose, 
         </button>
       </header>
       <div className="editor-body">
-      {pickAccount && (
+      {pickAccount && form.trans_code !== "Transfer" && (
         <label>
           {t("account")}
           <select value={aid} onChange={(e) => setAid(Number(e.target.value))} required>
@@ -237,6 +237,29 @@ export function Editor({ accountId, accounts, transId, t, pickAccount, onClose, 
       </label>
       {form.trans_code === "Transfer" ? (
         <>
+          <label>
+            {t("transferFrom")}
+            <select
+              value={aid}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setAid(next);
+                if (form.to_account_id === next) {
+                  setForm({ ...form, to_account_id: 0 });
+                }
+              }}
+              required
+            >
+              <option value={0}>—</option>
+              {accounts
+                .filter((a) => a.account_id !== form.to_account_id)
+                .map((a) => (
+                  <option key={a.account_id} value={a.account_id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+          </label>
           <label>
             {t("transferTo")}
             <select
