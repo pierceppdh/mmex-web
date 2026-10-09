@@ -83,6 +83,7 @@ export function Register({
   const [bulkPayeeQuery, setBulkPayeeQuery] = useState("");
   const [bulkPayeeId, setBulkPayeeId] = useState(0);
   const [bulkCateg, setBulkCateg] = useState("");
+  const [bulkAccount, setBulkAccount] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
   const anchorRef = useRef<number | null>(null);
@@ -243,9 +244,10 @@ export function Register({
   }
 
   async function runBulk(body: {
-    action: "delete" | "set_payee" | "set_category";
+    action: "delete" | "set_payee" | "set_category" | "set_account";
     payee_id?: number;
     categ_id?: number;
+    account_id?: number;
   }) {
     const trans_ids = [...selected];
     if (!trans_ids.length || bulkBusy) return;
@@ -263,6 +265,7 @@ export function Register({
         setBulkPayeeQuery("");
         setBulkPayeeId(0);
         setBulkCateg("");
+        setBulkAccount("");
         await load(0, false);
         onChanged();
       }
@@ -521,6 +524,28 @@ export function Register({
             {selected.size} {selected.size > 1 ? t("selectedMany") : t("selected")}
           </p>
           <div className="bulk-field">
+            <label>
+              {t("account")}
+              <select value={bulkAccount} onChange={(e) => setBulkAccount(e.target.value)}>
+                <option value="">{t("choose")}</option>
+                {accounts.map((a) => (
+                  <option key={a.account_id} value={a.account_id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={bulkBusy || bulkAccount === ""}
+              onClick={() =>
+                void runBulk({ action: "set_account", account_id: Number(bulkAccount) })
+              }
+            >
+              {t("applyChange")}
+            </button>
+          </div>
+          <div className="bulk-field">
             <PayeeField
               value={bulkPayeeQuery}
               payeeId={bulkPayeeId}
@@ -758,7 +783,6 @@ export function Register({
             accountId={editorAccount || accountId}
             accounts={accounts}
             transId={editing}
-            pickAccount={allAccounts && editing === null}
             t={t}
             onClose={() => setEditing(undefined)}
             onSaved={() => {

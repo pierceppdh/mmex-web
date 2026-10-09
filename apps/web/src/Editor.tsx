@@ -10,7 +10,6 @@ type Props = {
   accounts: Account[];
   transId: number | null;
   t: (key: MessageKey) => string;
-  pickAccount?: boolean;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -51,7 +50,7 @@ const EMPTY: {
   splits: [] as { categ_id: number; amount: string; notes: string; tag_ids: number[] }[],
 };
 
-export function Editor({ accountId, accounts, transId, t, pickAccount, onClose, onSaved }: Props) {
+export function Editor({ accountId, accounts, transId, t, onClose, onSaved }: Props) {
   const [aid, setAid] = useState(accountId);
   const [form, setForm] = useState(EMPTY);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -192,7 +191,7 @@ export function Editor({ accountId, accounts, transId, t, pickAccount, onClose, 
         </button>
       </header>
       <div className="editor-body">
-      {pickAccount && form.trans_code !== "Transfer" && (
+      {form.trans_code !== "Transfer" && (
         <label>
           {t("account")}
           <select value={aid} onChange={(e) => setAid(Number(e.target.value))} required>

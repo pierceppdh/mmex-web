@@ -824,13 +824,17 @@ def bulk_update(
     action: str,
     payee_id: int | None = None,
     categ_id: int | None = None,
+    account_id: int | None = None,
 ) -> dict[str, Any]:
-    """Delete, or set the payee or category, on many checking transactions.
+    """Delete, or set the payee, category, or account, on many checking transactions.
 
-    One statement lock rolls the whole batch back. Transfers have no payee.
-    Split rows keep their own categories. Rows already in the trash are skipped.
+    One statement lock rolls the whole batch back. The lock covers the row's
+    current account, a transfer's other account, and the account being assigned.
+    Transfers have no payee. A transfer is left in place when the chosen account
+    is already its other side. Split rows keep their own categories. Rows already
+    in the trash are skipped.
     """
-    if action not in ("delete", "set_payee", "set_category"):
+    if action not in ("delete", "set_payee", "set_category", "set_account"):
         raise TransactionError(f"invalid action {action!r}")
     ids: list[int] = []
     seen: set[int] = set()
@@ -847,10 +851,13 @@ def bulk_update(
 
     pid = int(payee_id or NOT_SET)
     cid = NOT_SET if categ_id in (None, 0) else int(categ_id)
+    aid = int(account_id or NOT_SET)
     if action == "set_payee" and pid <= 0:
         raise TransactionError("payee_id is required")
     if action == "set_category" and categ_id is None:
         raise TransactionError("categ_id is required")
+    if action == "set_account" and aid <= 0:
+        raise TransactionError("account_id is required")
 
     with engine.begin() as conn:
         stmt = text(
@@ -870,6 +877,8 @@ def bulk_update(
             _assert_payee(conn, pid)
         if action == "set_category" and cid > 0:
             _assert_category(conn, cid)
+        if action == "set_account":
+            _assert_account(conn, aid)
 
         split_stmt = text(
             "SELECT DISTINCT TRANSID FROM SPLITTRANSACTIONS_V1 WHERE TRANSID IN :ids"
@@ -882,18 +891,24 @@ def bulk_update(
             row = by_id[tid]
             deleted = bool(row[5])
             code = row[4]
+            current_account = int(row[1])
+            other_account = int(row[2] or 0)
             if deleted:
                 reason = "deleted"
             elif action == "set_payee" and code == TRANS_TRANSFER:
                 reason = "transfer"
             elif action == "set_category" and tid in split_ids:
                 reason = "split"
+            elif action == "set_account" and code == TRANS_TRANSFER and other_account == aid:
+                reason = "transfer"
             else:
                 reason = ""
             if reason:
                 skipped.append({"trans_id": tid, "reason": reason})
                 continue
-            _guard_statement(conn, int(row[1]), row[3], int(row[2] or 0))
+            _guard_statement(conn, current_account, row[3], other_account)
+            if action == "set_account" and aid != current_account:
+                _guard_statement(conn, aid, row[3])
             targets.append(tid)
 
         if targets:
@@ -904,6 +919,8 @@ def bulk_update(
                 params["pid"] = pid
             elif action == "set_category":
                 params["cid"] = cid
+            elif action == "set_account":
+                params["aid"] = aid
             conn.execute(upd, params)
 
     return {"updated": len(targets), "skipped": skipped}
@@ -920,8 +937,13 @@ def _bulk_sql(action: str) -> str:
             "UPDATE CHECKINGACCOUNT_V1 SET PAYEEID = :pid, LASTUPDATEDTIME = :ts "
             "WHERE TRANSID IN :ids"
         )
+    if action == "set_category":
+        return (
+            "UPDATE CHECKINGACCOUNT_V1 SET CATEGID = :cid, LASTUPDATEDTIME = :ts "
+            "WHERE TRANSID IN :ids"
+        )
     return (
-        "UPDATE CHECKINGACCOUNT_V1 SET CATEGID = :cid, LASTUPDATEDTIME = :ts "
+        "UPDATE CHECKINGACCOUNT_V1 SET ACCOUNTID = :aid, LASTUPDATEDTIME = :ts "
         "WHERE TRANSID IN :ids"
     )
 

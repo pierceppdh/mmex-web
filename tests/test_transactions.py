@@ -376,6 +376,182 @@ def test_bulk_payee_category_and_delete(authed_client: TestClient, mmex_settings
     assert empty.status_code == 422
 
 
+def test_withdrawal_update_can_change_account(
+    authed_client: TestClient, mmex_settings: Settings
+) -> None:
+    _seed(mmex_settings)
+    tid = _post_txn(authed_client, notes="pain")
+    updated = authed_client.put(
+        f"/api/transactions/{tid}",
+        json={
+            "account_id": 2,
+            "trans_code": "Withdrawal",
+            "trans_amount": "5.00",
+            "trans_date": "2026-03-02",
+            "payee_id": 10,
+            "categ_id": 2,
+            "notes": "pain",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["account_id"] == 2
+    assert updated.json()["notes"] == "pain"
+    src = authed_client.get("/api/accounts/1/transactions").json()["transactions"]
+    assert all(row["trans_id"] != tid for row in src)
+    moved = authed_client.get("/api/accounts/2/transactions").json()["transactions"]
+    assert moved[0]["trans_id"] == tid
+    assert Decimal(moved[0]["withdrawal"]) == Decimal("5")
+
+
+def test_bulk_set_account(authed_client: TestClient, mmex_settings: Settings) -> None:
+    _seed(mmex_settings)
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.begin() as conn:
+        _insert_account(conn, 3, "Zak", "Checking", "0")
+    engine.dispose()
+
+    first = _post_txn(authed_client, trans_amount="4.00", trans_date="2026-03-02")
+    second = _post_txn(authed_client, trans_amount="6.00", trans_date="2026-03-03")
+    deposit = _post_txn(
+        authed_client,
+        trans_code="Deposit",
+        trans_amount="8.00",
+        trans_date="2026-03-04",
+    )
+    transfer = _post_txn(
+        authed_client,
+        trans_code="Transfer",
+        trans_amount="2.00",
+        to_trans_amount="2.00",
+        to_account_id=2,
+        trans_date="2026-03-05",
+        payee_id=None,
+        categ_id=1,
+    )
+    doomed = _post_txn(authed_client, trans_date="2026-03-06")
+    removed = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [doomed], "action": "delete"},
+    )
+    assert removed.status_code == 200, removed.text
+
+    moved = authed_client.post(
+        "/api/transactions/bulk",
+        json={
+            "trans_ids": [first, second, deposit, transfer, doomed],
+            "action": "set_account",
+            "account_id": 2,
+        },
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["updated"] == 3
+    assert moved.json()["skipped"] == [
+        {"trans_id": transfer, "reason": "transfer"},
+        {"trans_id": doomed, "reason": "deleted"},
+    ]
+    on_savings = authed_client.get("/api/accounts/2/transactions").json()["transactions"]
+    assert {row["trans_id"] for row in on_savings} == {first, second, deposit, transfer}
+    still_here = authed_client.get("/api/accounts/1/transactions").json()["transactions"]
+    assert {row["trans_id"] for row in still_here} == {transfer}
+
+    shifted = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [transfer], "action": "set_account", "account_id": 3},
+    )
+    assert shifted.status_code == 200, shifted.text
+    assert shifted.json() == {"updated": 1, "skipped": []}
+
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.connect() as conn:
+        rows = {
+            int(r[0]): (int(r[1]), int(r[2] or 0))
+            for r in conn.execute(
+                text("SELECT TRANSID, ACCOUNTID, TOACCOUNTID FROM CHECKINGACCOUNT_V1")
+            )
+        }
+    engine.dispose()
+    assert rows[first] == (2, NOT_SET)
+    assert rows[deposit] == (2, NOT_SET)
+    assert rows[transfer] == (3, 2)
+    assert rows[doomed][0] == 1
+
+    unknown = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [first], "action": "set_account", "account_id": 99},
+    )
+    assert unknown.status_code == 404
+    missing = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [first], "action": "set_account"},
+    )
+    assert missing.status_code == 400
+
+
+def test_bulk_set_account_statement_lock_rolls_back(
+    authed_client: TestClient, mmex_settings: Settings
+) -> None:
+    _seed(mmex_settings)
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.begin() as conn:
+        _insert_account(conn, 3, "Zak", "Checking", "0")
+    engine.dispose()
+    early = _post_txn(authed_client, trans_date="2026-03-01")
+    late = _post_txn(authed_client, trans_date="2026-05-01")
+    transfer = _post_txn(
+        authed_client,
+        trans_code="Transfer",
+        trans_amount="3.00",
+        to_trans_amount="3.00",
+        to_account_id=3,
+        trans_date="2026-03-01",
+        payee_id=None,
+        categ_id=1,
+    )
+    lock_dest = authed_client.put(
+        "/api/accounts/2/statement",
+        json={"statement_locked": True, "statement_date": "2026-04-01"},
+    )
+    assert lock_dest.status_code == 200, lock_dest.text
+    blocked = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [early, late], "action": "set_account", "account_id": 2},
+    )
+    assert blocked.status_code == 423, blocked.text
+
+    lock_other = authed_client.put(
+        "/api/accounts/3/statement",
+        json={"statement_locked": True, "statement_date": "2026-04-01"},
+    )
+    assert lock_other.status_code == 200, lock_other.text
+    blocked_transfer = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [transfer, late], "action": "set_account", "account_id": 2},
+    )
+    assert blocked_transfer.status_code == 423, blocked_transfer.text
+
+    lock_src = authed_client.put(
+        "/api/accounts/1/statement",
+        json={"statement_locked": True, "statement_date": "2026-06-01"},
+    )
+    assert lock_src.status_code == 200, lock_src.text
+    blocked_src = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [late], "action": "set_account", "account_id": 2},
+    )
+    assert blocked_src.status_code == 423, blocked_src.text
+
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.connect() as conn:
+        accounts = {
+            int(r[0]): int(r[1])
+            for r in conn.execute(text("SELECT TRANSID, ACCOUNTID FROM CHECKINGACCOUNT_V1"))
+        }
+    engine.dispose()
+    assert accounts[early] == 1
+    assert accounts[late] == 1
+    assert accounts[transfer] == 1
+
+
 def test_bulk_statement_lock_rolls_back(authed_client: TestClient, mmex_settings: Settings) -> None:
     _seed(mmex_settings)
     early = _post_txn(authed_client, trans_date="2026-03-01", categ_id=2)

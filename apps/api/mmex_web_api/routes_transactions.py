@@ -54,9 +54,10 @@ class TransactionIn(BaseModel):
 
 class BulkIn(BaseModel):
     trans_ids: list[int] = Field(min_length=1, max_length=500)
-    action: Literal["delete", "set_payee", "set_category"]
+    action: Literal["delete", "set_payee", "set_category", "set_account"]
     payee_id: int | None = None
     categ_id: int | None = None
+    account_id: int | None = None
 
 
 def _payload(body: TransactionIn) -> dict[str, Any]:
@@ -212,6 +213,7 @@ def transaction_bulk(body: BulkIn, engine: Engine = Depends(require_write)) -> d
             action=body.action,
             payee_id=body.payee_id,
             categ_id=body.categ_id,
+            account_id=body.account_id,
         )
     except TransactionError as exc:
         raise _http(exc) from exc

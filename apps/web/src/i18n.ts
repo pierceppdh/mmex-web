@@ -177,7 +177,7 @@ export const STRINGS = {
     choose: "Choisir…",
     noCategory: "Aucune",
     bulkSkipped:
-      "Certaines opérations n’ont pas changé : un virement n’a pas de tiers, une ventilation garde ses catégories, ou la ligne est déjà à la corbeille.",
+      "Certaines opérations n’ont pas changé : un virement n’a pas de tiers ou ne peut pas rejoindre son autre compte, une ventilation garde ses catégories, ou la ligne est déjà à la corbeille.",
     deleted: "Supprimée",
     restore: "Restaurer",
     showDeleted: "Corbeille",
@@ -558,7 +558,7 @@ export const STRINGS = {
     choose: "Choose…",
     noCategory: "None",
     bulkSkipped:
-      "Some transactions were left unchanged: a transfer has no payee, a split keeps its own categories, or the row is already in the trash.",
+      "Some transactions were left unchanged: a transfer has no payee or cannot move onto its other account, a split keeps its own categories, or the row is already in the trash.",
     deleted: "Deleted",
     restore: "Restore",
     showDeleted: "Trash",
