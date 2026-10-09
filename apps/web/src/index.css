@@ -2357,6 +2357,17 @@ body:has(.drawer) {
   font-size: 0.85rem;
 }
 
+.recon-amount-follow {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+}
+
 @media (max-width: 900px) {
   .recon-review {
     grid-template-columns: 1fr;

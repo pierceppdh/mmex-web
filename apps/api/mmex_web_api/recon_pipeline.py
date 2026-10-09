@@ -13,7 +13,7 @@ from uuid import uuid4
 from sqlalchemy.engine import Engine
 
 from mmex_domain.recon import list_account_refs, match_statement_account, suggest_account_id
-from mmex_domain.recon_commit import apply_operations
+from mmex_domain.recon_commit import apply_operations, count_amount_adjustments
 from mmex_recon.balance import check_pdf_balances
 from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all, supplement_foreign_amounts
 from mmex_recon.parsers.registry import registry
@@ -183,7 +183,14 @@ def build_operations(session: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         bank = match.bank_transaction
         if match.selected_trans_id:
-            ops.append({"type": "reconcile", "trans_id": match.selected_trans_id})
+            ops.append(
+                {
+                    "type": "reconcile",
+                    "trans_id": match.selected_trans_id,
+                    "account_id": account_id,
+                    "amount": bank.amount,
+                }
+            )
         elif match.insert_as_transfer and match.transfer_counterpart_account_id:
             amount = bank.amount
             bank_abs = abs(amount)
@@ -265,25 +272,34 @@ def commit_session(engine: Engine, session: dict[str, Any], *, dry_run: bool) ->
         }
     ops = build_operations(session)
     if dry_run:
+        adjusted = count_amount_adjustments(engine, ops)
+        message = f"Dry-run: {len(ops)} opération(s)"
+        if adjusted:
+            message += f", {adjusted} montant(s) aligné(s) sur le relevé"
         return {
             "success": True,
             "dry_run": True,
             "to_insert_count": sum(1 for o in ops if o["type"] == "insert"),
             "to_transfer_count": sum(1 for o in ops if o["type"] == "transfer"),
             "to_reconcile_count": sum(1 for o in ops if o["type"] == "reconcile"),
-            "message": f"Dry-run: {len(ops)} opération(s)",
+            "amounts_adjusted": adjusted,
+            "message": message,
         }
     if not ops:
         return {"success": False, "message": "Aucune ligne incluse", "inserted": 0}
     result = apply_operations(engine, ops)
+    adjusted = len(result["adjusted"])
+    message = f"{len(result['inserted'])} insérées, {len(result['reconciled'])} pointées"
+    if adjusted:
+        message += f", {adjusted} montant(s) aligné(s) sur le relevé"
     return {
         "success": True,
         "dry_run": False,
         "inserted": len(result["inserted"]),
         "reconciled": len(result["reconciled"]),
+        "amounts_adjusted": adjusted,
         "inserted_ids": result["inserted"],
         "reconciled_ids": result["reconciled"],
-        "message": (
-            f"{len(result['inserted'])} insérées, {len(result['reconciled'])} pointées"
-        ),
+        "adjusted_ids": result["adjusted"],
+        "message": message,
     }

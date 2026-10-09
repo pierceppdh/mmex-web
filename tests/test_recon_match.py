@@ -3,8 +3,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import create_engine, text
 
+from mmex_domain.money import format_cents
+from mmex_domain.transactions import TransactionError
 from mmex_recon.matcher import (
     load_candidates,
     match_all,
@@ -363,14 +366,31 @@ def test_commit_insert_and_reconcile(authed_client, mmex_settings) -> None:
             },
         ],
     }
-    dry = commit_session(authed_client.app.state.mmex.engine, session, dry_run=True)
+    engine = authed_client.app.state.mmex.engine
+    dry = commit_session(engine, session, dry_run=True)
     assert dry["success"] is True
     assert dry["to_reconcile_count"] == 1
     assert dry["to_insert_count"] == 1
-    live = commit_session(authed_client.app.state.mmex.engine, session, dry_run=False)
+    assert dry["amounts_adjusted"] == 0
+    live = commit_session(engine, session, dry_run=False)
     assert live["success"] is True
     assert live["inserted"] == 1
     assert live["reconciled"] == 2
+    assert live["amounts_adjusted"] == 0
+    assert "aligné" not in live["message"]
+    booked = _booking(engine, 11)
+    assert booked["amount"] == "5.00"
+    assert booked["to_amount"] == "5.00"
+    assert booked["status"] == "R"
+    with engine.connect() as conn:
+        created = conn.execute(
+            text(
+                "SELECT TRANSCODE, TRANSAMOUNT, STATUS FROM CHECKINGACCOUNT_V1 WHERE TRANSID != 11"
+            )
+        ).one()
+    assert created[0] == "Withdrawal"
+    assert format_cents(created[1]) == "3.20"
+    assert created[2] == "R"
 
 
 def test_patch_match_new_entry_fields(authed_client) -> None:
@@ -410,6 +430,287 @@ def test_patch_match_new_entry_fields(authed_client) -> None:
     assert row["transfer_counterpart_account_name"] == "Epargne"
     assert row["selected_payee_name"] == "New shop"
     assert row["category_id"] == 3
+
+
+def _booking(engine, trans_id: int) -> dict[str, str]:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT ACCOUNTID, TOACCOUNTID, TRANSCODE, TRANSAMOUNT, TOTRANSAMOUNT, STATUS
+                  FROM CHECKINGACCOUNT_V1 WHERE TRANSID = :id
+                """
+            ),
+            {"id": trans_id},
+        ).one()
+    return {
+        "account_id": str(int(row[0])),
+        "to_account_id": str(int(row[1])),
+        "trans_code": row[2],
+        "amount": format_cents(row[3]),
+        "to_amount": format_cents(row[4]),
+        "status": row[5] or "",
+    }
+
+
+def _splits(engine, trans_id: int) -> list[str]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT SPLITTRANSAMOUNT FROM SPLITTRANSACTIONS_V1
+                 WHERE TRANSID = :id ORDER BY SPLITTRANSID
+                """
+            ),
+            {"id": trans_id},
+        ).fetchall()
+    return [format_cents(row[0]) for row in rows]
+
+
+def _link_session(trans_id: int, amount: str, *, account_id: int = 1) -> dict:
+    return {
+        "account_id": account_id,
+        "matches": [
+            {
+                "bank_transaction": {
+                    "date": "2026-01-01",
+                    "description": "SHOP",
+                    "amount": amount,
+                },
+                "status": "MANUAL",
+                "include": True,
+                "selected_trans_id": trans_id,
+                "selected_payee_name": "Shop",
+                "candidates": [],
+            }
+        ],
+    }
+
+
+def _lock(engine, account_id: int, statement_date: str = "2026-01-15") -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE ACCOUNTLIST_V1
+                   SET STATEMENTLOCKED = 1, STATEMENTDATE = :day
+                 WHERE ACCOUNTID = :id
+                """
+            ),
+            {"day": statement_date, "id": account_id},
+        )
+
+
+def test_reconcile_updates_withdrawal_to_bank_amount(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        conn.execute(
+            text("INSERT INTO PAYEE_V1 (PAYEEID, PAYEENAME, CATEGID, ACTIVE) VALUES (1, 'Shop', -1, 1)")
+        )
+        _insert_txn(conn, 11, 1, "Withdrawal", "5.00", payee_id=1)
+    session = _link_session(11, "-5.40")
+    dry = commit_session(engine, session, dry_run=True)
+    assert dry["amounts_adjusted"] == 1
+    assert "1 montant(s) aligné(s) sur le relevé" in dry["message"]
+    assert _booking(engine, 11)["amount"] == "5.00"
+    assert _booking(engine, 11)["status"] == ""
+    live = commit_session(engine, session, dry_run=False)
+    assert live["success"] is True
+    assert live["amounts_adjusted"] == 1
+    assert live["adjusted_ids"] == [11]
+    booked = _booking(engine, 11)
+    assert booked["amount"] == "5.40"
+    assert booked["to_amount"] == "5.40"
+    assert booked["status"] == "R"
+    assert booked["trans_code"] == "Withdrawal"
+
+
+def test_reconcile_one_cent_delta_follows_the_statement(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_txn(conn, 11, 1, "Withdrawal", "5.00")
+    commit_session(engine, _link_session(11, "-5.01"), dry_run=False)
+    assert _booking(engine, 11)["amount"] == "5.01"
+    assert _booking(engine, 11)["status"] == "R"
+
+
+def test_reconcile_local_transfer_keeps_a_different_currency_leg(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_account(conn, 2, "Epargne", "Term", "0")
+        _insert_txn(conn, 21, 1, "Transfer", "10.00", to_account_id=2, to_amount="10.00")
+        _insert_txn(conn, 22, 1, "Transfer", "10.00", to_account_id=2, to_amount="9.00")
+    commit_session(engine, _link_session(21, "-10.20"), dry_run=False)
+    same = _booking(engine, 21)
+    assert same["amount"] == "10.20"
+    assert same["to_amount"] == "10.20"
+    assert same["status"] == "R"
+    assert same["account_id"] == "1"
+    commit_session(engine, _link_session(22, "-10.20"), dry_run=False)
+    fx = _booking(engine, 22)
+    assert fx["amount"] == "10.20"
+    assert fx["to_amount"] == "9.00"
+    assert fx["trans_code"] == "Transfer"
+
+
+def test_reconcile_inbound_transfer_updates_the_destination_amount(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_account(conn, 2, "Epargne", "Term", "0")
+        _insert_txn(conn, 31, 2, "Transfer", "10.00", to_account_id=1, to_amount="10.00")
+        _insert_txn(conn, 32, 2, "Transfer", "10.00", to_account_id=1, to_amount="9.00")
+    commit_session(engine, _link_session(31, "10.15"), dry_run=False)
+    same = _booking(engine, 31)
+    assert same["amount"] == "10.15"
+    assert same["to_amount"] == "10.15"
+    assert same["account_id"] == "2"
+    assert same["to_account_id"] == "1"
+    commit_session(engine, _link_session(32, "9.40"), dry_run=False)
+    fx = _booking(engine, 32)
+    assert fx["amount"] == "10.00"
+    assert fx["to_amount"] == "9.40"
+
+
+def test_reconcile_foreign_booking_stays_on_its_account(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Courant", "Checking", "0")
+        _insert_account(conn, 2, "Epargne", "Term", "0")
+        _insert_txn(conn, 41, 2, "Withdrawal", "5.00")
+    commit_session(engine, _link_session(41, "-5.40", account_id=1), dry_run=False)
+    booked = _booking(engine, 41)
+    assert booked["account_id"] == "2"
+    assert booked["amount"] == "5.40"
+    assert booked["to_amount"] == "5.40"
+    assert booked["status"] == "R"
+
+
+def test_reconcile_rescales_splits_with_the_parent_amount(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_txn(conn, 51, 1, "Withdrawal", "4.00")
+        conn.execute(
+            text(
+                """
+                INSERT INTO SPLITTRANSACTIONS_V1
+                    (SPLITTRANSID, TRANSID, CATEGID, SPLITTRANSAMOUNT, NOTES)
+                VALUES
+                    (1, 51, -1, '1.00', ''),
+                    (2, 51, -1, '3.00', '')
+                """
+            )
+        )
+    commit_session(engine, _link_session(51, "-5.00"), dry_run=False)
+    assert _booking(engine, 51)["amount"] == "5.00"
+    assert _splits(engine, 51) == ["1.25", "3.75"]
+
+
+def test_reconcile_split_rounding_lands_on_the_last_line(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_txn(conn, 52, 1, "Withdrawal", "10.00")
+        conn.execute(
+            text(
+                """
+                INSERT INTO SPLITTRANSACTIONS_V1
+                    (SPLITTRANSID, TRANSID, CATEGID, SPLITTRANSAMOUNT, NOTES)
+                VALUES
+                    (3, 52, -1, '1.00', ''),
+                    (4, 52, -1, '9.00', '')
+                """
+            )
+        )
+    commit_session(engine, _link_session(52, "-10.03"), dry_run=False)
+    assert _booking(engine, 52)["amount"] == "10.03"
+    assert _splits(engine, 52) == ["1.00", "9.03"]
+
+
+def test_reconcile_rejects_a_split_that_would_not_stay_positive(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_txn(conn, 53, 1, "Withdrawal", "4.00")
+        conn.execute(
+            text(
+                """
+                INSERT INTO SPLITTRANSACTIONS_V1
+                    (SPLITTRANSID, TRANSID, CATEGID, SPLITTRANSAMOUNT, NOTES)
+                VALUES
+                    (5, 53, -1, '5.00', ''),
+                    (6, 53, -1, '-1.00', '')
+                """
+            )
+        )
+    with pytest.raises(TransactionError, match="split amount must stay positive"):
+        commit_session(engine, _link_session(53, "-5.00"), dry_run=False)
+    assert _booking(engine, 53)["amount"] == "4.00"
+    assert _booking(engine, 53)["status"] == ""
+    assert _splits(engine, 53) == ["5.00", "-1.00"]
+
+
+def test_reconcile_amount_change_respects_the_statement_lock(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_account(conn, 2, "Epargne", "Term", "0")
+        _insert_txn(conn, 61, 1, "Withdrawal", "5.00")
+        _insert_txn(conn, 62, 1, "Withdrawal", "5.00")
+        _insert_txn(conn, 63, 1, "Transfer", "10.00", to_account_id=2, to_amount="10.00")
+    _lock(engine, 1)
+    session = _link_session(61, "-5.40")
+    sid = "lock-amount"
+    authed_client.app.state.mmex.recon_sessions[sid] = session
+    dry = authed_client.post(f"/api/recon/sessions/{sid}/commit", json={"dry_run": True})
+    assert dry.status_code == 423, dry.text
+    live = authed_client.post(f"/api/recon/sessions/{sid}/commit", json={"dry_run": False})
+    assert live.status_code == 423, live.text
+    assert "statement locked" in live.json()["detail"]
+    blocked = _booking(engine, 61)
+    assert blocked["amount"] == "5.00"
+    assert blocked["status"] == ""
+
+    commit_session(engine, _link_session(62, "-5.00"), dry_run=False)
+    same = _booking(engine, 62)
+    assert same["amount"] == "5.00"
+    assert same["status"] == "R"
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE ACCOUNTLIST_V1 SET STATEMENTLOCKED = 0 WHERE ACCOUNTID = 1")
+        )
+    _lock(engine, 2)
+    with pytest.raises(TransactionError, match="statement locked"):
+        commit_session(engine, _link_session(63, "-10.20"), dry_run=False)
+    assert _booking(engine, 63)["amount"] == "10.00"
+    assert _booking(engine, 63)["status"] == ""
+
+
+def test_reconcile_inbound_amount_change_leaves_splits_on_the_source_amount(authed_client) -> None:
+    engine = authed_client.app.state.mmex.engine
+    with engine.begin() as conn:
+        _insert_account(conn, 1, "Banque", "Checking", "0")
+        _insert_account(conn, 2, "Epargne", "Term", "0")
+        _insert_txn(conn, 71, 2, "Transfer", "10.00", to_account_id=1, to_amount="9.00")
+        conn.execute(
+            text(
+                """
+                INSERT INTO SPLITTRANSACTIONS_V1
+                    (SPLITTRANSID, TRANSID, CATEGID, SPLITTRANSAMOUNT, NOTES)
+                VALUES (7, 71, -1, '10.00', '')
+                """
+            )
+        )
+    commit_session(engine, _link_session(71, "9.40"), dry_run=False)
+    booked = _booking(engine, 71)
+    assert booked["amount"] == "10.00"
+    assert booked["to_amount"] == "9.40"
+    assert _splits(engine, 71) == ["10.00"]
 
 
 def test_create_session_parse_error(authed_client, monkeypatch) -> None:

@@ -133,6 +133,9 @@ function LineEditor({
             {" "}
             {t("reconLinked")}
             {linked ? ` — ${mmexLabel(linked, t)}` : ` #${row.selected_trans_id}`}
+            {linked && amountsDiffer(row.bank_transaction.amount, linked.amount) ? (
+              <span className="recon-amount-follow">{amountFollow(row, linked, t)}</span>
+            ) : null}
             <button
               type="button"
               className="ghost"
@@ -310,6 +313,11 @@ function LineEditor({
                 <span>
                   {candidateLabel(c, t)}
                   {c.amount_match ? " · =" : ""}
+                  {amountsDiffer(row.bank_transaction.amount, c.mmex_transaction.amount) ? (
+                    <span className="recon-amount-follow">
+                      {amountFollow(row, c.mmex_transaction, t)}
+                    </span>
+                  ) : null}
                 </span>
                 <button
                   type="button"
@@ -371,6 +379,20 @@ function linkedTxn(row: MatchRow): MmexTxn | null {
     row.candidates.find((c) => c.mmex_transaction.trans_id === row.selected_trans_id)
       ?.mmex_transaction ?? null
   );
+}
+
+function amountsDiffer(bank: string, booked: string): boolean {
+  const left = cents(bank);
+  const right = cents(booked);
+  if (!left || !right) return false;
+  const bankCents = Math.abs(Number(left));
+  const bookedCents = Math.abs(Number(right));
+  if (!Number.isFinite(bankCents) || !Number.isFinite(bookedCents)) return false;
+  return bankCents.toFixed(2) !== bookedCents.toFixed(2);
+}
+
+function amountFollow(row: MatchRow, tx: MmexTxn, t: (key: MessageKey) => string): string {
+  return `${t("reconAmountFollow")} (${cents(tx.amount)} → ${cents(row.bank_transaction.amount)})`;
 }
 
 export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitted }: Props) {
@@ -738,11 +760,18 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                           </td>
                           <td>{rowKind(m, t)}</td>
                           <td>
-                            {linked
-                              ? mmexLabel(linked, t)
-                              : m.insert_as_transfer
-                                ? `${t("reconOutbound")} ${m.transfer_counterpart_account_name || "—"}`
-                                : m.selected_payee_name || t("reconNewInsert")}
+                            {linked ? (
+                              <>
+                                {mmexLabel(linked, t)}
+                                {amountsDiffer(m.bank_transaction.amount, linked.amount) ? (
+                                  <span className="recon-amount-follow">{amountFollow(m, linked, t)}</span>
+                                ) : null}
+                              </>
+                            ) : m.insert_as_transfer ? (
+                              `${t("reconOutbound")} ${m.transfer_counterpart_account_name || "—"}`
+                            ) : (
+                              m.selected_payee_name || t("reconNewInsert")
+                            )}
                           </td>
                         </tr>
                         {idx === selectedIdx && (

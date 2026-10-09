@@ -206,7 +206,8 @@ def commit(
     try:
         result = commit_session(engine, session, dry_run=body.dry_run)
     except TransactionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        code = 423 if "locked" in str(exc) else 400
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
     if result.get("success") and not body.dry_run:
         doc_id = session.get("paperless_doc_id")
         if doc_id:
