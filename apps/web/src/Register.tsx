@@ -86,6 +86,7 @@ export function Register({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
   const anchorRef = useRef<number | null>(null);
+  const shiftRef = useRef(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(
@@ -668,19 +669,27 @@ export function Register({
                   setEditing(row.trans_id);
                 }}
               >
-                <td className="col-pick" onClick={(e) => e.stopPropagation()}>
+                <td
+                  className="col-pick"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (e.target !== e.currentTarget || row.deleted_time) return;
+                    toggleRow(row.trans_id, index, e.shiftKey);
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={selected.has(row.trans_id)}
                     disabled={Boolean(row.deleted_time)}
                     aria-label={t("selectRow")}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      if (row.deleted_time) return;
-                      toggleRow(row.trans_id, index, e.shiftKey);
+                    onPointerDown={(e) => {
+                      shiftRef.current = e.shiftKey;
                     }}
-                    onChange={() => undefined}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => {
+                      if (row.deleted_time) return;
+                      toggleRow(row.trans_id, index, shiftRef.current);
+                    }}
                   />
                 </td>
                 <td>{dateLabel(row.trans_date)}</td>

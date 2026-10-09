@@ -814,26 +814,23 @@ body {
 
 .register-table th.col-pick,
 .register-table td.col-pick {
-  position: sticky;
-  left: 0;
-  width: 2.25rem;
-  min-width: 2.25rem;
+  width: 2.4rem;
+  min-width: 2.4rem;
   text-align: center;
-  background: var(--panel);
-  z-index: 1;
   padding-left: 0.35rem;
   padding-right: 0.35rem;
 }
 
-.register-table th.col-pick {
-  z-index: 3;
+.register-table td.col-pick {
+  cursor: pointer;
 }
 
 .register-table .col-pick input {
-  width: 1rem;
-  height: 1rem;
+  width: 1.15rem;
+  height: 1.15rem;
   margin: 0;
   accent-color: var(--ok);
+  vertical-align: middle;
 }
 
 .register-table {
