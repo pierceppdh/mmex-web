@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { CustomFields } from "./CustomFields";
+import { cents } from "./money";
 import { PayeeField, resolvePayeeId } from "./PayeeField";
 import type { MessageKey } from "./i18n";
 import type { Account, Attachment, Category, Tag, TxnDetail } from "./types";
@@ -231,6 +232,7 @@ export function Editor({ accountId, accounts, transId, t, onClose, onSaved }: Pr
           inputMode="decimal"
           value={form.trans_amount}
           onChange={(e) => setForm({ ...form, trans_amount: e.target.value })}
+          onBlur={() => setForm((prev) => ({ ...prev, trans_amount: cents(prev.trans_amount) }))}
           required
         />
       </label>
@@ -282,6 +284,9 @@ export function Editor({ accountId, accounts, transId, t, onClose, onSaved }: Pr
               inputMode="decimal"
               value={form.to_trans_amount}
               onChange={(e) => setForm({ ...form, to_trans_amount: e.target.value })}
+              onBlur={() =>
+                setForm((prev) => ({ ...prev, to_trans_amount: cents(prev.to_trans_amount) }))
+              }
             />
           </label>
         </>
@@ -394,7 +399,7 @@ export function Editor({ accountId, accounts, transId, t, onClose, onSaved }: Pr
           {t("splits")}{" "}
           {form.splits.length > 0 && (
             <span className="k">
-              {t("splitSum")} {splitTotal}
+              {t("splitSum")} {splitTotal.toFixed(2)}
             </span>
           )}
         </legend>
@@ -423,6 +428,15 @@ export function Editor({ accountId, accounts, transId, t, onClose, onSaved }: Pr
                 next[i] = { ...row, amount: e.target.value };
                 setForm({ ...form, splits: next });
               }}
+              onBlur={() =>
+                setForm((prev) => {
+                  const next = [...prev.splits];
+                  const current = next[i];
+                  if (!current) return prev;
+                  next[i] = { ...current, amount: cents(current.amount) };
+                  return { ...prev, splits: next };
+                })
+              }
             />
             <input
               value={row.notes}

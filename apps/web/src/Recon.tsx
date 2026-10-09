@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
+import { cents } from "./money";
 import { PayeeField } from "./PayeeField";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
 import type { MessageKey } from "./i18n";
@@ -350,7 +351,7 @@ function docLabel(doc: ReconDoc): string {
 
 function mmexLabel(tx: MmexTxn, t: (key: MessageKey) => string): string {
   const date = tx.trans_date.slice(0, 10);
-  const amt = tx.amount;
+  const amt = cents(tx.amount);
   const booked = tx.account_name ? ` · ${tx.account_name}` : "";
   if (tx.trans_code === "Transfer" || tx.is_inbound_transfer) {
     const other = tx.counterpart_account_name || tx.payee_name || "—";
@@ -731,7 +732,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                           </td>
                           <td>{m.bank_transaction.date}</td>
                           <td>{m.bank_transaction.description}</td>
-                          <td className="num">{m.bank_transaction.amount}</td>
+                          <td className="num">{cents(m.bank_transaction.amount)}</td>
                           <td>
                             <span className={statusClass(m.status)}>{m.status}</span>
                           </td>

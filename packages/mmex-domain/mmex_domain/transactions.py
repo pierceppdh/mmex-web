@@ -27,7 +27,7 @@ from mmex_domain.constants import (
 from mmex_domain.balances import load_currencies
 from mmex_domain.filters import apply_filter, parse_filter
 from mmex_domain.lookups import _category_path
-from mmex_domain.money import as_decimal, format_amount
+from mmex_domain.money import as_decimal, format_amount, format_cents
 
 class TransactionError(ValueError):
     """Invalid transaction payload or missing row."""
@@ -183,7 +183,7 @@ def list_transactions(
                 "payee_id": int(r[3] or NOT_SET),
                 "payee_name": r[4] if r[3] not in (None, NOT_SET) else None,
                 "trans_code": r[5],
-                "trans_amount": str(as_decimal(r[6])),
+                "trans_amount": format_cents(r[6]),
                 "status": r[7] or "",
                 "transaction_number": r[8] or "",
                 "notes": r[9] or "",
@@ -191,7 +191,7 @@ def list_transactions(
                 "trans_date": r[11],
                 "last_updated_time": r[12],
                 "deleted_time": r[13] or "",
-                "to_trans_amount": str(as_decimal(r[14] if r[14] is not None else r[6])),
+                "to_trans_amount": format_cents(r[14] if r[14] is not None else r[6]),
                 "color": int(r[15] if r[15] is not None else NOT_SET),
                 "followup_id": int(r[16] if r[16] is not None else NOT_SET),
                 "from_account_name": r[17],
@@ -200,7 +200,7 @@ def list_transactions(
             flow = account_flow(item, account_id)
             running += flow
             item["flow"] = str(flow)
-            item["running_balance"] = str(running)
+            item["running_balance"] = format_cents(running)
             parsed.append(item)
 
         account_total = len(parsed)
@@ -312,7 +312,7 @@ def list_ledger_transactions(
                 "payee_id": int(r[3] or NOT_SET),
                 "payee_name": r[4] if r[3] not in (None, NOT_SET) else None,
                 "trans_code": r[5],
-                "trans_amount": str(as_decimal(r[6])),
+                "trans_amount": format_cents(r[6]),
                 "status": r[7] or "",
                 "transaction_number": r[8] or "",
                 "notes": r[9] or "",
@@ -320,7 +320,7 @@ def list_ledger_transactions(
                 "trans_date": r[11],
                 "last_updated_time": r[12],
                 "deleted_time": r[13] or "",
-                "to_trans_amount": str(as_decimal(r[14] if r[14] is not None else r[6])),
+                "to_trans_amount": format_cents(r[14] if r[14] is not None else r[6]),
                 "color": int(r[15] if r[15] is not None else NOT_SET),
                 "followup_id": int(r[16] if r[16] is not None else NOT_SET),
                 "from_account_name": r[17],
@@ -330,7 +330,7 @@ def list_ledger_transactions(
                 "running_balance": "",
             }
             code = item["trans_code"]
-            amt = str(as_decimal(r[6]))
+            amt = format_cents(r[6])
             if code == TRANS_DEPOSIT:
                 item["withdrawal"] = None
                 item["deposit"] = amt
@@ -389,9 +389,9 @@ def list_ledger_transactions(
 def _wd_columns(item: dict[str, Any], account_id: int) -> tuple[str | None, str | None]:
     flow = as_decimal(item["flow"])
     if flow < 0:
-        return str(-flow), None
+        return format_cents(-flow), None
     if flow > 0:
-        return None, str(flow)
+        return None, format_cents(flow)
     return None, None
 
 
@@ -421,7 +421,7 @@ def get_transaction(engine: Engine, trans_id: int) -> dict[str, Any]:
             "payee_id": int(row[3] or NOT_SET),
             "payee_name": row[4] if row[3] not in (None, NOT_SET) else None,
             "trans_code": row[5],
-            "trans_amount": str(as_decimal(row[6])),
+            "trans_amount": format_cents(row[6]),
             "status": row[7] or "",
             "transaction_number": row[8] or "",
             "notes": row[9] or "",
@@ -434,7 +434,7 @@ def get_transaction(engine: Engine, trans_id: int) -> dict[str, Any]:
             "trans_date": row[11],
             "last_updated_time": row[12],
             "deleted_time": row[13] or "",
-            "to_trans_amount": str(as_decimal(row[14] if row[14] is not None else row[6])),
+            "to_trans_amount": format_cents(row[14] if row[14] is not None else row[6]),
             "color": int(row[15] if row[15] is not None else NOT_SET),
             "followup_id": int(row[16] if row[16] is not None else NOT_SET),
             "tags": _tags_for(conn, REF_TRANSACTION, [int(row[0])]).get(int(row[0]), []),
@@ -471,7 +471,7 @@ def _load_splits(
                 "split_id": int(r[0]),
                 "categ_id": cid,
                 "category_path": _category_path(cid, cats) if cid in cats else None,
-                "amount": str(as_decimal(r[2])),
+                "amount": format_cents(r[2]),
                 "notes": r[3] or "",
                 "tags": tags.get(int(r[0]), []),
             }

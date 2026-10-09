@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "./api";
+import { cents } from "./money";
 import { PayeeField } from "./PayeeField";
 import type { MessageKey } from "./i18n";
 import { checkingAccounts } from "./groups";
@@ -97,6 +98,7 @@ export function QuickAdd({ accounts, t, showClosed = false, onChanged }: Props) 
             autoFocus
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => setAmount((prev) => cents(prev))}
             required
           />
         </label>

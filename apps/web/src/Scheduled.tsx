@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { cents } from "./money";
 import { CustomFields } from "./CustomFields";
 import { PayeeField, resolvePayeeId } from "./PayeeField";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
@@ -223,6 +224,7 @@ export function Scheduled({ accounts, locale, t, onChanged }: Props) {
             inputMode="decimal"
             value={form.trans_amount}
             onChange={(e) => setForm({ ...form, trans_amount: e.target.value })}
+            onBlur={() => setForm((prev) => ({ ...prev, trans_amount: cents(prev.trans_amount) }))}
             required
           />
         </label>
@@ -389,7 +391,7 @@ export function Scheduled({ accounts, locale, t, onChanged }: Props) {
                 {locale === "en" ? row.repeat_label_en : row.repeat_label_fr}
                 <div className="k">{locale === "en" ? row.auto_label_en : row.auto_label_fr}</div>
               </td>
-              <td className="num">{row.trans_amount}</td>
+              <td className="num">{cents(row.trans_amount)}</td>
               <td>
                 <span className="row-actions">
                   <button type="button" onClick={() => void act(row.bd_id, "enter")}>

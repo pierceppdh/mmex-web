@@ -22,7 +22,7 @@ from sqlalchemy.engine import Connection, Engine
 
 from mmex_domain.balances import load_currencies
 from mmex_domain.constants import NOT_SET, STATUS_VOID
-from mmex_domain.money import as_decimal, to_base
+from mmex_domain.money import as_decimal, format_cents, to_base
 
 LINK_STOCK = "Stock"
 LINK_ASSET = "Asset"
@@ -510,7 +510,7 @@ def _list_stock_lots(conn: Connection, stock_id: int) -> list[dict[str, Any]]:
             "share_lot": r[6] or "",
             "trans_date": _iso_date(r[7], required=False),
             "trans_code": r[8] or "",
-            "trans_amount": _s(r[9]) if r[9] is not None else "0",
+            "trans_amount": format_cents(r[9]) if r[9] is not None else "0.00",
             "status": r[10] or "",
             "notes": r[11] or "",
         }
@@ -770,7 +770,7 @@ def _asset_links(conn: Connection, asset_id: int) -> list[dict[str, Any]]:
             "trans_id": int(r[1]),
             "trans_date": _iso_date(r[2], required=False),
             "trans_code": r[3] or "",
-            "trans_amount": _s(r[4]) if r[4] is not None else "0",
+            "trans_amount": format_cents(r[4]) if r[4] is not None else "0.00",
             "status": r[5] or "",
             "notes": r[6] or "",
             "account_name": r[7],

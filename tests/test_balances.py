@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 
 from mmex_domain.balances import account_rows
-from mmex_domain.money import format_amount
+from mmex_domain.money import format_amount, format_cents
 from mmex_web_api.db import make_engine
 from tests.conftest import make_mmex_db
 
@@ -218,3 +218,10 @@ def test_dashboard_includes_assets_v1(tmp_path: Path) -> None:
 
 def test_format_amount_groups() -> None:
     assert format_amount(Decimal("1234.5"), scale=100, pfx="", sfx=" €", decimal_point=",", group_separator=" ") == "1 234,50 €"
+
+
+def test_format_cents_always_has_two_decimals() -> None:
+    assert format_cents("8") == "8.00"
+    assert format_cents("8.5") == "8.50"
+    assert format_cents(Decimal("-0.1")) == "-0.10"
+    assert format_cents("1234.567") == "1234.57"

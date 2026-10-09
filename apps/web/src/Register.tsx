@@ -4,6 +4,7 @@ import { Editor } from "./Editor";
 import { PayeeField } from "./PayeeField";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
 import { api } from "./api";
+import { cents } from "./money";
 import type { MessageKey } from "./i18n";
 import type { Account, Category, SavedView, Tag, TxnFilter, TxnRow } from "./types";
 
@@ -757,9 +758,9 @@ export function Register({
                   </button>
                 </td>
                 <td>{row.category_path ?? (row.is_split ? t("splits") : "")}</td>
-                <td className="num">{row.withdrawal ?? ""}</td>
-                <td className="num">{row.deposit ?? ""}</td>
-                {!allAccounts && <td className="num col-extra">{row.running_balance}</td>}
+                <td className="num">{cents(row.withdrawal)}</td>
+                <td className="num">{cents(row.deposit)}</td>
+                {!allAccounts && <td className="num col-extra">{cents(row.running_balance)}</td>}
               </tr>
             ))}
           </tbody>

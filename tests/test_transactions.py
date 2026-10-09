@@ -376,6 +376,44 @@ def test_bulk_payee_category_and_delete(authed_client: TestClient, mmex_settings
     assert empty.status_code == 422
 
 
+def test_transaction_amounts_show_two_decimals(
+    authed_client: TestClient, mmex_settings: Settings
+) -> None:
+    _seed(mmex_settings)
+    half = _post_txn(authed_client, trans_amount="8.5", trans_date="2026-03-02")
+    whole = _post_txn(authed_client, trans_amount="8", trans_date="2026-03-03")
+    split = _post_txn(
+        authed_client,
+        trans_amount="3.5",
+        trans_date="2026-03-04",
+        categ_id=-1,
+        splits=[
+            {"categ_id": 2, "amount": "1.2", "notes": ""},
+            {"categ_id": 3, "amount": "2.3", "notes": ""},
+        ],
+    )
+    detail = authed_client.get(f"/api/transactions/{half}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["trans_amount"] == "8.50"
+    split_body = authed_client.get(f"/api/transactions/{split}").json()
+    assert split_body["trans_amount"] == "3.50"
+    assert [row["amount"] for row in split_body["splits"]] == ["1.20", "2.30"]
+    listed = {
+        row["trans_id"]: row
+        for row in authed_client.get("/api/accounts/1/transactions").json()["transactions"]
+    }
+    assert listed[half]["withdrawal"] == "8.50"
+    assert listed[half]["running_balance"] == "91.50"
+    assert listed[whole]["withdrawal"] == "8.00"
+    assert listed[whole]["running_balance"] == "83.50"
+    ledger = {
+        row["trans_id"]: row
+        for row in authed_client.get("/api/ledger/transactions").json()["transactions"]
+    }
+    assert ledger[whole]["withdrawal"] == "8.00"
+    assert ledger[half]["deposit"] is None
+
+
 def test_withdrawal_update_can_change_account(
     authed_client: TestClient, mmex_settings: Settings
 ) -> None:

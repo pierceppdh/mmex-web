@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CustomFields } from "./CustomFields";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
 import { api } from "./api";
+import { cents } from "./money";
 import type { MessageKey } from "./i18n";
 
 type Asset = {
@@ -394,7 +395,7 @@ export function Assets({ t }: Props) {
                     <td>{row.trans_id}</td>
                     <td>{row.account_name}</td>
                     <td>{row.trans_code}</td>
-                    <td className="num">{row.trans_amount}</td>
+                    <td className="num">{cents(row.trans_amount)}</td>
                     <td>
                       <button
                         type="button"

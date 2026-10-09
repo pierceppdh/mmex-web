@@ -14,6 +14,12 @@ def as_decimal(value: object | None) -> Decimal:
     return Decimal(str(value))
 
 
+def format_cents(value: object | None) -> str:
+    """A transaction amount with exactly two decimal places and a dot."""
+    quantized = as_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{quantized:.2f}"
+
+
 def currency_precision(scale: int | None) -> int:
     if not scale or scale <= 1:
         return 0

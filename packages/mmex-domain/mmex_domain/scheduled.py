@@ -10,7 +10,7 @@ from sqlalchemy.engine import Connection, Engine
 
 from mmex_domain.constants import NOT_SET, REF_TRANSACTION
 from mmex_domain.lookups import _category_path
-from mmex_domain.money import as_decimal
+from mmex_domain.money import as_decimal, format_cents
 from mmex_domain.repeats import (
     AUTO_SILENT,
     INTERVAL_TYPES,
@@ -116,7 +116,7 @@ def list_scheduled(engine: Engine) -> dict[str, Any]:
             "payee_id": int(r[5] or NOT_SET),
             "payee_name": r[6] if r[5] not in (None, NOT_SET) else None,
             "trans_code": r[7],
-            "trans_amount": str(as_decimal(r[8])),
+            "trans_amount": format_cents(r[8]),
             "status": r[9] or "",
             "transaction_number": r[10] or "",
             "notes": r[11] or "",
@@ -134,7 +134,7 @@ def list_scheduled(engine: Engine) -> dict[str, Any]:
             "num_occurrences": int(r[16] if r[16] is not None else NOT_SET),
             "color": int(r[17] if r[17] is not None else NOT_SET),
             "followup_id": int(r[18] if r[18] is not None else NOT_SET),
-            "to_trans_amount": str(as_decimal(r[19] if r[19] is not None else r[8])),
+            "to_trans_amount": format_cents(r[19] if r[19] is not None else r[8]),
             "days_until": days,
             "overdue": days <= 0,
             "split_count": split_counts.get(int(r[0]), 0),
@@ -178,7 +178,7 @@ def _load_splits(conn: Connection, bd_id: int) -> list[dict[str, Any]]:
         {
             "split_id": int(r[0]),
             "categ_id": int(r[1]),
-            "amount": str(as_decimal(r[2])),
+            "amount": format_cents(r[2]),
             "notes": r[3] or "",
         }
         for r in rows
