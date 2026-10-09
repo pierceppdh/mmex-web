@@ -243,6 +243,164 @@ def test_transfer_update_can_change_source_account(
     assert Decimal(dest[0]["deposit"]) == Decimal("10")
 
 
+def _post_txn(client: TestClient, **extra: object) -> int:
+    payload = {
+        "account_id": 1,
+        "trans_code": "Withdrawal",
+        "trans_amount": "5.00",
+        "trans_date": "2026-03-02",
+        "payee_id": 10,
+        "categ_id": 2,
+    }
+    payload.update(extra)
+    created = client.post("/api/transactions", json=payload)
+    assert created.status_code == 200, created.text
+    return int(created.json()["trans_id"])
+
+
+def test_bulk_payee_category_and_delete(authed_client: TestClient, mmex_settings: Settings) -> None:
+    _seed(mmex_settings)
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO PAYEE_V1 (PAYEEID, PAYEENAME, CATEGID, ACTIVE) "
+                "VALUES (11, 'Pharmacie', 3, 1)"
+            )
+        )
+    engine.dispose()
+
+    first = _post_txn(authed_client, trans_amount="4.00", trans_date="2026-03-02")
+    second = _post_txn(authed_client, trans_amount="6.00", trans_date="2026-03-03", categ_id=3)
+    transfer = _post_txn(
+        authed_client,
+        trans_code="Transfer",
+        trans_amount="2.00",
+        to_trans_amount="2.00",
+        to_account_id=2,
+        trans_date="2026-03-04",
+        payee_id=None,
+        categ_id=1,
+    )
+    split = _post_txn(
+        authed_client,
+        trans_amount="9.00",
+        trans_date="2026-03-05",
+        categ_id=-1,
+        splits=[
+            {"categ_id": 2, "amount": "4.00", "notes": ""},
+            {"categ_id": 3, "amount": "5.00", "notes": ""},
+        ],
+    )
+
+    payees = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [first, second, transfer, first], "action": "set_payee", "payee_id": 11},
+    )
+    assert payees.status_code == 200, payees.text
+    body = payees.json()
+    assert body["updated"] == 2
+    assert body["skipped"] == [{"trans_id": transfer, "reason": "transfer"}]
+
+    categories = authed_client.post(
+        "/api/transactions/bulk",
+        json={
+            "trans_ids": [first, transfer, split],
+            "action": "set_category",
+            "categ_id": 1,
+        },
+    )
+    assert categories.status_code == 200, categories.text
+    assert categories.json()["updated"] == 2
+    assert categories.json()["skipped"] == [{"trans_id": split, "reason": "split"}]
+
+    cleared = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [second], "action": "set_category", "categ_id": -1},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["updated"] == 1
+
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.connect() as conn:
+        rows = {
+            int(r[0]): (int(r[1]), int(r[2]), r[3] or "")
+            for r in conn.execute(
+                text("SELECT TRANSID, PAYEEID, CATEGID, DELETEDTIME FROM CHECKINGACCOUNT_V1")
+            )
+        }
+        split_cats = [
+            int(r[0])
+            for r in conn.execute(
+                text("SELECT CATEGID FROM SPLITTRANSACTIONS_V1 WHERE TRANSID = :id ORDER BY SPLITTRANSID"),
+                {"id": split},
+            )
+        ]
+    engine.dispose()
+    assert rows[first][:2] == (11, 1)
+    assert rows[second][:2] == (11, NOT_SET)
+    assert rows[transfer][0] == NOT_SET
+    assert rows[transfer][1] == 1
+    assert rows[split][1] == NOT_SET
+    assert split_cats == [2, 3]
+    assert all(row[2] == "" for row in rows.values())
+
+    removed = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [first, second], "action": "delete"},
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json() == {"updated": 2, "skipped": []}
+    listed = authed_client.get("/api/accounts/1/transactions").json()["transactions"]
+    assert {row["trans_id"] for row in listed} == {transfer, split}
+
+    again = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [first], "action": "set_payee", "payee_id": 10},
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["updated"] == 0
+    assert again.json()["skipped"] == [{"trans_id": first, "reason": "deleted"}]
+
+    missing = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [999], "action": "delete"},
+    )
+    assert missing.status_code == 404
+    unknown_payee = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [transfer], "action": "set_payee", "payee_id": 99},
+    )
+    assert unknown_payee.status_code == 404
+    empty = authed_client.post("/api/transactions/bulk", json={"trans_ids": [], "action": "delete"})
+    assert empty.status_code == 422
+
+
+def test_bulk_statement_lock_rolls_back(authed_client: TestClient, mmex_settings: Settings) -> None:
+    _seed(mmex_settings)
+    early = _post_txn(authed_client, trans_date="2026-03-01", categ_id=2)
+    late = _post_txn(authed_client, trans_date="2026-05-01", categ_id=2)
+    lock = authed_client.put(
+        "/api/accounts/1/statement",
+        json={"statement_locked": True, "statement_date": "2026-04-01"},
+    )
+    assert lock.status_code == 200, lock.text
+    blocked = authed_client.post(
+        "/api/transactions/bulk",
+        json={"trans_ids": [early, late], "action": "set_category", "categ_id": 3},
+    )
+    assert blocked.status_code == 423, blocked.text
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.connect() as conn:
+        cats = {
+            int(r[0]): int(r[1])
+            for r in conn.execute(text("SELECT TRANSID, CATEGID FROM CHECKINGACCOUNT_V1"))
+        }
+    engine.dispose()
+    assert cats[early] == 2
+    assert cats[late] == 2
+
+
 def test_lookups(authed_client: TestClient, mmex_settings: Settings) -> None:
     _seed(mmex_settings)
     cats = authed_client.get("/api/categories").json()["categories"]

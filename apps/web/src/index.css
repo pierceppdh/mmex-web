@@ -694,6 +694,72 @@ body {
   padding: 0.35rem 0.5rem;
 }
 
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem 0.85rem;
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.bulk-bar > p {
+  margin: 0 0.2rem 0.35rem 0;
+}
+
+.bulk-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.bulk-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.bulk-bar input,
+.bulk-bar select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  min-width: 10rem;
+}
+
+.bulk-note {
+  margin: -0.35rem 0 0.75rem;
+}
+
+.bulk-bar button {
+  background: color-mix(in srgb, var(--ok) 18%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--line));
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.bulk-bar button.ghost {
+  background: var(--bg);
+  border-color: var(--line);
+  font-weight: 550;
+}
+
+.bulk-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .fold {
   margin: 0 0 0.75rem;
   border: 1px solid var(--line);
@@ -746,16 +812,28 @@ body {
   cursor: pointer;
 }
 
-.register-table th:first-child,
-.register-table td:first-child {
+.register-table th.col-pick,
+.register-table td.col-pick {
   position: sticky;
   left: 0;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  text-align: center;
   background: var(--panel);
   z-index: 1;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
 }
 
-.register-table th:first-child {
+.register-table th.col-pick {
   z-index: 3;
+}
+
+.register-table .col-pick input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--ok);
 }
 
 .register-table {
@@ -794,13 +872,17 @@ body {
   opacity: 0.55;
 }
 
-.register-table tr.c-1 td:first-child { box-shadow: inset 4px 0 #e53935; }
-.register-table tr.c-2 td:first-child { box-shadow: inset 4px 0 #fdd835; }
-.register-table tr.c-3 td:first-child { box-shadow: inset 4px 0 #43a047; }
-.register-table tr.c-4 td:first-child { box-shadow: inset 4px 0 #1e88e5; }
-.register-table tr.c-5 td:first-child { box-shadow: inset 4px 0 #8e24aa; }
-.register-table tr.c-6 td:first-child { box-shadow: inset 4px 0 #fb8c00; }
-.register-table tr.c-7 td:first-child { box-shadow: inset 4px 0 #78909c; }
+.register-table tr.picked td {
+  background: color-mix(in srgb, var(--ok) 12%, var(--panel));
+}
+
+.register-table tr.c-1 td.col-pick { box-shadow: inset 4px 0 #e53935; }
+.register-table tr.c-2 td.col-pick { box-shadow: inset 4px 0 #fdd835; }
+.register-table tr.c-3 td.col-pick { box-shadow: inset 4px 0 #43a047; }
+.register-table tr.c-4 td.col-pick { box-shadow: inset 4px 0 #1e88e5; }
+.register-table tr.c-5 td.col-pick { box-shadow: inset 4px 0 #8e24aa; }
+.register-table tr.c-6 td.col-pick { box-shadow: inset 4px 0 #fb8c00; }
+.register-table tr.c-7 td.col-pick { box-shadow: inset 4px 0 #78909c; }
 
 .swatches {
   display: flex;
@@ -1738,6 +1820,21 @@ h2 {
 
   .register-actions button {
     flex: 1;
+    min-height: 2.6rem;
+  }
+
+  .bulk-field,
+  .bulk-bar label {
+    flex: 1 1 100%;
+  }
+
+  .bulk-bar input,
+  .bulk-bar select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .bulk-bar button {
     min-height: 2.6rem;
   }
 

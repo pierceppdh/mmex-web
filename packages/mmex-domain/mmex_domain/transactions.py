@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection, Engine
 
 from mmex_domain.accounts import AccountError, assert_writable
@@ -817,6 +817,115 @@ def restore(engine: Engine, trans_id: int) -> dict[str, Any]:
     return get_transaction(engine, trans_id)
 
 
+def bulk_update(
+    engine: Engine,
+    trans_ids: list[int],
+    *,
+    action: str,
+    payee_id: int | None = None,
+    categ_id: int | None = None,
+) -> dict[str, Any]:
+    """Delete, or set the payee or category, on many checking transactions.
+
+    One statement lock rolls the whole batch back. Transfers have no payee.
+    Split rows keep their own categories. Rows already in the trash are skipped.
+    """
+    if action not in ("delete", "set_payee", "set_category"):
+        raise TransactionError(f"invalid action {action!r}")
+    ids: list[int] = []
+    seen: set[int] = set()
+    for raw in trans_ids:
+        tid = int(raw)
+        if tid <= 0 or tid in seen:
+            continue
+        seen.add(tid)
+        ids.append(tid)
+    if not ids:
+        raise TransactionError("trans_ids is required")
+    if len(ids) > 500:
+        raise TransactionError("too many transactions")
+
+    pid = int(payee_id or NOT_SET)
+    cid = NOT_SET if categ_id in (None, 0) else int(categ_id)
+    if action == "set_payee" and pid <= 0:
+        raise TransactionError("payee_id is required")
+    if action == "set_category" and categ_id is None:
+        raise TransactionError("categ_id is required")
+
+    with engine.begin() as conn:
+        stmt = text(
+            """
+            SELECT TRANSID, ACCOUNTID, TOACCOUNTID, TRANSDATE, TRANSCODE, DELETEDTIME
+              FROM CHECKINGACCOUNT_V1
+             WHERE TRANSID IN :ids
+            """
+        ).bindparams(bindparam("ids", expanding=True))
+        rows = conn.execute(stmt, {"ids": ids}).fetchall()
+        by_id = {int(r[0]): r for r in rows}
+        missing = [tid for tid in ids if tid not in by_id]
+        if missing:
+            raise TransactionError(f"unknown transaction {missing[0]}")
+
+        if action == "set_payee":
+            _assert_payee(conn, pid)
+        if action == "set_category" and cid > 0:
+            _assert_category(conn, cid)
+
+        split_stmt = text(
+            "SELECT DISTINCT TRANSID FROM SPLITTRANSACTIONS_V1 WHERE TRANSID IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        split_ids = {int(r[0]) for r in conn.execute(split_stmt, {"ids": ids})}
+
+        skipped: list[dict[str, Any]] = []
+        targets: list[int] = []
+        for tid in ids:
+            row = by_id[tid]
+            deleted = bool(row[5])
+            code = row[4]
+            if deleted:
+                reason = "deleted"
+            elif action == "set_payee" and code == TRANS_TRANSFER:
+                reason = "transfer"
+            elif action == "set_category" and tid in split_ids:
+                reason = "split"
+            else:
+                reason = ""
+            if reason:
+                skipped.append({"trans_id": tid, "reason": reason})
+                continue
+            _guard_statement(conn, int(row[1]), row[3], int(row[2] or 0))
+            targets.append(tid)
+
+        if targets:
+            now = _now()
+            upd = text(_bulk_sql(action)).bindparams(bindparam("ids", expanding=True))
+            params: dict[str, Any] = {"ids": targets, "ts": now}
+            if action == "set_payee":
+                params["pid"] = pid
+            elif action == "set_category":
+                params["cid"] = cid
+            conn.execute(upd, params)
+
+    return {"updated": len(targets), "skipped": skipped}
+
+
+def _bulk_sql(action: str) -> str:
+    if action == "delete":
+        return (
+            "UPDATE CHECKINGACCOUNT_V1 SET DELETEDTIME = :ts, LASTUPDATEDTIME = :ts "
+            "WHERE TRANSID IN :ids"
+        )
+    if action == "set_payee":
+        return (
+            "UPDATE CHECKINGACCOUNT_V1 SET PAYEEID = :pid, LASTUPDATEDTIME = :ts "
+            "WHERE TRANSID IN :ids"
+        )
+    return (
+        "UPDATE CHECKINGACCOUNT_V1 SET CATEGID = :cid, LASTUPDATEDTIME = :ts "
+        "WHERE TRANSID IN :ids"
+    )
+
+
 def _assert_account(conn: Connection, account_id: int) -> None:
     row = conn.execute(
         text("SELECT ACCOUNTID FROM ACCOUNTLIST_V1 WHERE ACCOUNTID = :id"),
@@ -833,3 +942,12 @@ def _assert_payee(conn: Connection, payee_id: int) -> None:
     ).fetchone()
     if row is None:
         raise TransactionError(f"unknown payee {payee_id}")
+
+
+def _assert_category(conn: Connection, categ_id: int) -> None:
+    row = conn.execute(
+        text("SELECT CATEGID FROM CATEGORY_V1 WHERE CATEGID = :id"),
+        {"id": categ_id},
+    ).fetchone()
+    if row is None:
+        raise TransactionError(f"unknown category {categ_id}")

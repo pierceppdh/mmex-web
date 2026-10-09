@@ -12,6 +12,7 @@ from sqlalchemy.engine import Engine
 from mmex_domain.lookups import list_categories, list_payees, list_tags
 from mmex_domain.transactions import (
     TransactionError,
+    bulk_update,
     create_transaction,
     cycle_status,
     get_transaction,
@@ -49,6 +50,13 @@ class TransactionIn(BaseModel):
     followup_id: int = -1
     tag_ids: list[int] = Field(default_factory=list)
     splits: list[SplitIn] = Field(default_factory=list)
+
+
+class BulkIn(BaseModel):
+    trans_ids: list[int] = Field(min_length=1, max_length=500)
+    action: Literal["delete", "set_payee", "set_category"]
+    payee_id: int | None = None
+    categ_id: int | None = None
 
 
 def _payload(body: TransactionIn) -> dict[str, Any]:
@@ -191,6 +199,20 @@ def transaction_get(
 ) -> dict[str, Any]:
     try:
         return get_transaction(engine, trans_id)
+    except TransactionError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/transactions/bulk")
+def transaction_bulk(body: BulkIn, engine: Engine = Depends(require_write)) -> dict[str, Any]:
+    try:
+        return bulk_update(
+            engine,
+            body.trans_ids,
+            action=body.action,
+            payee_id=body.payee_id,
+            categ_id=body.categ_id,
+        )
     except TransactionError as exc:
         raise _http(exc) from exc
 

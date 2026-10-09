@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CustomFields } from "./CustomFields";
 import { Editor } from "./Editor";
 import { PayeeField } from "./PayeeField";
@@ -79,6 +79,14 @@ export function Register({
   const [viewId, setViewId] = useState<number | "">("");
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
   const [editorAccount, setEditorAccount] = useState(accountId);
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [bulkPayeeQuery, setBulkPayeeQuery] = useState("");
+  const [bulkPayeeId, setBulkPayeeId] = useState(0);
+  const [bulkCateg, setBulkCateg] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNote, setBulkNote] = useState<string | null>(null);
+  const anchorRef = useRef<number | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(
     async (start: number, append: boolean, current: TxnFilter = filter) => {
@@ -106,6 +114,9 @@ export function Register({
   useEffect(() => {
     setRows([]);
     setEditing(undefined);
+    setSelected(new Set());
+    setBulkNote(null);
+    anchorRef.current = null;
     void load(0, false).catch((err: Error) => setError(err.message));
   }, [accountId, load]);
 
@@ -205,6 +216,63 @@ export function Register({
     return value.slice(0, 10);
   }
 
+  function toggleRow(id: number, index: number, shift: boolean) {
+    const anchor = anchorRef.current;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const turningOn = !prev.has(id);
+      if (shift && anchor != null) {
+        const start = Math.min(anchor, index);
+        const end = Math.max(anchor, index);
+        for (let i = start; i <= end; i += 1) {
+          const row = shown[i];
+          if (!row || row.deleted_time) continue;
+          if (turningOn) next.add(row.trans_id);
+          else next.delete(row.trans_id);
+        }
+      } else if (turningOn) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+    anchorRef.current = index;
+    setBulkNote(null);
+  }
+
+  async function runBulk(body: {
+    action: "delete" | "set_payee" | "set_category";
+    payee_id?: number;
+    categ_id?: number;
+  }) {
+    const trans_ids = [...selected];
+    if (!trans_ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const result = await api.post<{
+        updated: number;
+        skipped: { trans_id: number; reason: string }[];
+      }>("/api/transactions/bulk", { trans_ids, ...body });
+      setBulkNote(result.skipped.length ? t("bulkSkipped") : null);
+      if (result.updated > 0) {
+        setSelected(new Set());
+        anchorRef.current = null;
+        setBulkPayeeQuery("");
+        setBulkPayeeId(0);
+        setBulkCateg("");
+        await load(0, false);
+        onChanged();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("saveError");
+      setError(msg.toLowerCase().includes("locked") ? t("statementLocked") : msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const locked = Boolean(account?.statement_locked) && Boolean(account?.statement_date);
   const shown = useMemo(
     () =>
@@ -222,7 +290,16 @@ export function Register({
       }),
     [rows, sort],
   );
-  const colCount = allAccounts ? 8 : 8;
+  const selectable = useMemo(() => shown.filter((row) => !row.deleted_time), [shown]);
+  const allSelected = selectable.length > 0 && selectable.every((row) => selected.has(row.trans_id));
+  const someSelected = selectable.some((row) => selected.has(row.trans_id));
+  const colCount = 9;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected && !allSelected;
+    }
+  }, [someSelected, allSelected]);
 
   return (
     <div className="register">
@@ -437,11 +514,104 @@ export function Register({
         )}
       </div>
 
+      {selected.size > 0 && (
+        <div className="bulk-bar" role="region" aria-label={t("bulkActions")}>
+          <p className="k">
+            {selected.size} {selected.size > 1 ? t("selectedMany") : t("selected")}
+          </p>
+          <div className="bulk-field">
+            <PayeeField
+              value={bulkPayeeQuery}
+              payeeId={bulkPayeeId}
+              t={t}
+              listId="bulk-payee"
+              onChange={(name, id) => {
+                setBulkPayeeQuery(name);
+                setBulkPayeeId(id);
+              }}
+            />
+            <button
+              type="button"
+              disabled={bulkBusy || bulkPayeeId <= 0}
+              onClick={() => void runBulk({ action: "set_payee", payee_id: bulkPayeeId })}
+            >
+              {t("applyChange")}
+            </button>
+          </div>
+          <div className="bulk-field">
+            <label>
+              {t("category")}
+              <select value={bulkCateg} onChange={(e) => setBulkCateg(e.target.value)}>
+                <option value="">{t("choose")}</option>
+                <option value="-1">{t("noCategory")}</option>
+                {categories.map((c) => (
+                  <option key={c.categ_id} value={c.categ_id}>
+                    {c.path}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={bulkBusy || bulkCateg === ""}
+              onClick={() => void runBulk({ action: "set_category", categ_id: Number(bulkCateg) })}
+            >
+              {t("applyChange")}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="ghost danger"
+            disabled={bulkBusy}
+            onClick={() => {
+              if (!window.confirm(t("confirmBulkDelete"))) return;
+              void runBulk({ action: "delete" });
+            }}
+          >
+            {t("bulkDelete")}
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={bulkBusy}
+            onClick={() => {
+              setSelected(new Set());
+              anchorRef.current = null;
+              setBulkNote(null);
+            }}
+          >
+            {t("cancel")}
+          </button>
+        </div>
+      )}
+      {bulkNote && <p className="k bulk-note">{bulkNote}</p>}
       {error && <p className="error-text">{error}</p>}
       <div className="register-table-wrap">
         <table className="register-table">
           <thead>
             <tr>
+              <th className="col-pick">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  disabled={selectable.length === 0}
+                  aria-label={t("selectAll")}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => {
+                    setBulkNote(null);
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (allSelected) {
+                        for (const row of selectable) next.delete(row.trans_id);
+                      } else {
+                        for (const row of selectable) next.add(row.trans_id);
+                      }
+                      return next;
+                    });
+                  }}
+                />
+              </th>
               <SortTh label={t("date")} k="date" sort={sort} onSort={(k) => setSort((s) => toggleSort(s, k))} />
               <SortTh label={t("status")} k="status" sort={sort} onSort={(k) => setSort((s) => toggleSort(s, k))} />
               <SortTh
@@ -489,15 +659,30 @@ export function Register({
                 </td>
               </tr>
             )}
-            {shown.map((row) => (
+            {shown.map((row, index) => (
               <tr
                 key={row.trans_id}
-                className={`${row.status === "V" ? "void" : ""}${row.deleted_time ? " trashed" : ""}${row.color > 0 ? ` c-${row.color}` : ""}`}
+                className={`${row.status === "V" ? "void" : ""}${row.deleted_time ? " trashed" : ""}${row.color > 0 ? ` c-${row.color}` : ""}${selected.has(row.trans_id) ? " picked" : ""}`}
                 onClick={() => {
                   setEditorAccount(row.account_id);
                   setEditing(row.trans_id);
                 }}
               >
+                <td className="col-pick" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(row.trans_id)}
+                    disabled={Boolean(row.deleted_time)}
+                    aria-label={t("selectRow")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (row.deleted_time) return;
+                      toggleRow(row.trans_id, index, e.shiftKey);
+                    }}
+                    onChange={() => undefined}
+                  />
+                </td>
                 <td>{dateLabel(row.trans_date)}</td>
                 <td>
                   <button
