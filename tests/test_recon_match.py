@@ -66,6 +66,59 @@ def test_amount_mismatch_still_lists_candidate() -> None:
     assert result.include is False
 
 
+def test_date_window_drops_a_booking_outside_the_setting() -> None:
+    mmex = [
+        MmexTransaction(
+            trans_id=1,
+            account_id=1,
+            payee_name="NETFLIX.COM",
+            trans_code="Withdrawal",
+            amount=Decimal("-15.25"),
+            status="",
+            trans_date=date(2026, 5, 2),
+        )
+    ]
+    bank = BankTransaction(
+        date=date(2026, 5, 8),
+        description="NETFLIX.COM subscription",
+        amount=Decimal("-15.25"),
+    )
+    narrow = match_transaction(bank, mmex)
+    assert narrow.status == MatchStatus.NO_MATCH
+    assert narrow.candidates == []
+    wide = match_transaction(bank, mmex, tolerance_days=6)
+    assert wide.status == MatchStatus.AUTO_MATCHED
+    assert wide.selected_trans_id == 1
+
+
+def test_amount_window_drops_a_near_gap_when_tightened() -> None:
+    mmex = [
+        MmexTransaction(
+            trans_id=1,
+            account_id=1,
+            payee_name="NETFLIX.COM",
+            trans_code="Withdrawal",
+            amount=Decimal("-15.25"),
+            status="",
+            trans_date=date(2026, 5, 2),
+        )
+    ]
+    bank = BankTransaction(
+        date=date(2026, 5, 2),
+        description="NETFLIX.COM subscription",
+        amount=Decimal("-16.00"),
+    )
+    offered = match_transaction(bank, mmex)
+    assert offered.status == MatchStatus.AMOUNT_MISMATCH
+    assert offered.candidates
+    assert offered.candidates[0].amount_match is False
+    tight = match_transaction(bank, mmex, amount_delta=Decimal("0.50"))
+    assert tight.status == MatchStatus.NO_MATCH
+    assert tight.candidates == []
+    exact = match_transaction(bank, mmex, amount_delta=Decimal("0"))
+    assert exact.status == MatchStatus.NO_MATCH
+
+
 def test_inbound_transfer_uses_to_amount_and_source_name(tmp_path) -> None:
     db = make_mmex_db(tmp_path / "data.mmb")
     engine = create_engine(f"sqlite:///{db}")

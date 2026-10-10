@@ -35,6 +35,8 @@ class SettingsIn(BaseModel):
     theme: str | None = None
     show_closed_accounts: bool | None = None
     default_account_id: int | None = None
+    recon_date_days: int | None = None
+    recon_amount_delta: str | float | None = None
 
 
 class BaseCurrencyIn(BaseModel):

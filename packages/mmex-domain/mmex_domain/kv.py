@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
+
+from mmex_domain.money import format_cents
 
 
 def kv_get(conn: Connection, name: str) -> str | None:
@@ -43,7 +47,58 @@ def kv_get_engine(engine: Engine, name: str) -> str | None:
 THEME_KEY = "MMEXWEB_THEME"
 SHOW_CLOSED_KEY = "MMEXWEB_SHOW_CLOSED"
 DEFAULT_ACCOUNT_KEY = "MMEXWEB_DEFAULT_ACCOUNT"
+RECON_DAYS_KEY = "MMEXWEB_RECON_DAYS"
+RECON_AMOUNT_KEY = "MMEXWEB_RECON_AMOUNT"
 THEMES = ("system", "light", "dark")
+DEFAULT_RECON_DAYS = 4
+DEFAULT_RECON_AMOUNT = "1.00"
+MAX_RECON_DAYS = 60
+MAX_RECON_AMOUNT = Decimal("10000")
+
+
+def parse_recon_days(value: object) -> int:
+    """Date window for a statement line, in days. 0 means the same day only."""
+    if value is None or str(value).strip() == "":
+        return DEFAULT_RECON_DAYS
+    try:
+        days = int(str(value).strip())
+    except ValueError as exc:
+        raise ValueError(f"recon date window must be 0–{MAX_RECON_DAYS} days") from exc
+    if days < 0 or days > MAX_RECON_DAYS:
+        raise ValueError(f"recon date window must be 0–{MAX_RECON_DAYS} days")
+    return days
+
+
+def parse_recon_amount(value: object) -> str:
+    """Largest amount gap still offered when the statement text matches."""
+    if value is None or str(value).strip() == "":
+        return DEFAULT_RECON_AMOUNT
+    raw = str(value).strip().replace(" ", "").replace(",", ".")
+    try:
+        amount = Decimal(raw)
+    except InvalidOperation as exc:
+        raise ValueError("recon amount delta must be a number") from exc
+    if amount < 0 or amount > MAX_RECON_AMOUNT:
+        raise ValueError("recon amount delta must be 0–10000")
+    return format_cents(amount)
+
+
+def _stored_days(raw: str | None) -> int:
+    if raw is None or not raw.strip():
+        return DEFAULT_RECON_DAYS
+    try:
+        return parse_recon_days(raw)
+    except ValueError:
+        return DEFAULT_RECON_DAYS
+
+
+def _stored_amount(raw: str | None) -> str:
+    if raw is None or not raw.strip():
+        return DEFAULT_RECON_AMOUNT
+    try:
+        return parse_recon_amount(raw)
+    except ValueError:
+        return DEFAULT_RECON_AMOUNT
 
 
 def web_prefs(engine: Engine) -> dict[str, object]:
@@ -53,6 +108,8 @@ def web_prefs(engine: Engine) -> dict[str, object]:
             theme = "system"
         closed_raw = (kv_get(conn, SHOW_CLOSED_KEY) or "FALSE").strip().upper()
         default_raw = kv_get(conn, DEFAULT_ACCOUNT_KEY)
+        days = _stored_days(kv_get(conn, RECON_DAYS_KEY))
+        amount = _stored_amount(kv_get(conn, RECON_AMOUNT_KEY))
     default_id: int | None = None
     if default_raw:
         try:
@@ -65,7 +122,15 @@ def web_prefs(engine: Engine) -> dict[str, object]:
         "theme": theme,
         "show_closed_accounts": closed_raw in ("TRUE", "1", "YES", "ON"),
         "default_account_id": default_id,
+        "recon_date_days": days,
+        "recon_amount_delta": amount,
     }
+
+
+def recon_window(engine: Engine) -> tuple[int, Decimal]:
+    """Date window and fuzzy amount gap used when matching a statement."""
+    prefs = web_prefs(engine)
+    return int(prefs["recon_date_days"]), Decimal(str(prefs["recon_amount_delta"]))
 
 
 def save_web_prefs(engine: Engine, data: dict[str, object]) -> dict[str, object]:
@@ -95,4 +160,8 @@ def save_web_prefs(engine: Engine, data: dict[str, object]) -> dict[str, object]
                     if exists is None:
                         raise ValueError(f"unknown account {aid}")
                 kv_set(conn, DEFAULT_ACCOUNT_KEY, str(aid) if aid > 0 else "")
+        if "recon_date_days" in data and data["recon_date_days"] is not None:
+            kv_set(conn, RECON_DAYS_KEY, str(parse_recon_days(data["recon_date_days"])))
+        if "recon_amount_delta" in data and data["recon_amount_delta"] is not None:
+            kv_set(conn, RECON_AMOUNT_KEY, parse_recon_amount(data["recon_amount_delta"]))
     return web_prefs(engine)

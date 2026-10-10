@@ -28,8 +28,9 @@ from mmex_recon.schemas import (
 )
 
 AMOUNT_TOLERANCE = Decimal("0.01")
-# config.py in bank-reconciliation-app
+# Defaults match the previous fixed window. Settings can widen or narrow them.
 TOLERANCE_DAYS = 4
+NEAR_AMOUNT_DELTA = Decimal("1.00")
 TEXT_AUTO = 80.0
 
 # Words that appear in account titles but not on the bank line.
@@ -396,8 +397,9 @@ def _foreign_transfer_hit(
     return _counterpart_text(bank_tx, mmex_tx) >= TEXT_AUTO
 
 
-def _near_amount(bank_amount: Decimal, mmex_tx: MmexTransaction) -> bool:
-    return abs(abs(Decimal(str(bank_amount))) - abs(Decimal(str(mmex_tx.amount)))) <= Decimal("1.00")
+def _near_amount(bank_amount: Decimal, mmex_tx: MmexTransaction, amount_delta: Decimal) -> bool:
+    gap = abs(abs(Decimal(str(bank_amount))) - abs(Decimal(str(mmex_tx.amount))))
+    return gap <= amount_delta
 
 
 def _amount_match(bank_amount: Decimal, mmex_tx: MmexTransaction, credit_card: bool) -> bool:
@@ -428,6 +430,9 @@ def _score_bank(
     mmex_transactions: list[MmexTransaction],
     credit_card: bool,
     statement_account_name: str | None = None,
+    *,
+    tolerance_days: int = TOLERANCE_DAYS,
+    amount_delta: Decimal = NEAR_AMOUNT_DELTA,
 ) -> list[_Scored]:
     raw: list[_Scored] = []
     for mmex_tx in mmex_transactions:
@@ -436,11 +441,13 @@ def _score_bank(
         if not _foreign_transfer_hit(bank_tx, mmex_tx, statement_account_name):
             continue
         date_delta = _date_delta(bank_tx, mmex_tx)
-        if date_delta > TOLERANCE_DAYS:
+        if date_delta > tolerance_days:
             continue
         amount_ok = _amount_match(bank_tx.amount, mmex_tx, credit_card)
         text = _text_score(bank_tx, mmex_tx)
-        if not amount_ok and not (text >= TEXT_AUTO and _near_amount(bank_tx.amount, mmex_tx)):
+        if not amount_ok and not (
+            text >= TEXT_AUTO and _near_amount(bank_tx.amount, mmex_tx, amount_delta)
+        ):
             continue
         same_sign = _amounts_equal(bank_tx.amount, mmex_tx.amount)
         date_score = max(0, 100 - date_delta * 15)
@@ -572,9 +579,16 @@ def match_transaction(
     *,
     credit_card: bool = False,
     statement_account_name: str | None = None,
+    tolerance_days: int = TOLERANCE_DAYS,
+    amount_delta: Decimal = NEAR_AMOUNT_DELTA,
 ) -> TransactionMatch:
     scored = _score_bank(
-        bank_tx, mmex_transactions, credit_card, statement_account_name
+        bank_tx,
+        mmex_transactions,
+        credit_card,
+        statement_account_name,
+        tolerance_days=tolerance_days,
+        amount_delta=amount_delta,
     )
     chosen = _choose(scored, used_trans_ids or set(), unique=True)
     return _to_match(bank_tx, scored, chosen)
@@ -586,9 +600,19 @@ def match_all(
     *,
     credit_card: bool = False,
     statement_account_name: str | None = None,
+    tolerance_days: int = TOLERANCE_DAYS,
+    amount_delta: Decimal = NEAR_AMOUNT_DELTA,
 ) -> list[TransactionMatch]:
     rows = [
-        _score_bank(bank, mmex_txs, credit_card, statement_account_name) for bank in bank_txs
+        _score_bank(
+            bank,
+            mmex_txs,
+            credit_card,
+            statement_account_name,
+            tolerance_days=tolerance_days,
+            amount_delta=amount_delta,
+        )
+        for bank in bank_txs
     ]
     used: set[int] = set()
     chosen: list[_Scored | None] = [None] * len(rows)

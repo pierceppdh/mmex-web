@@ -12,10 +12,11 @@ from uuid import uuid4
 
 from sqlalchemy.engine import Engine
 
+from mmex_domain.kv import recon_window
 from mmex_domain.recon import list_account_refs, match_statement_account, suggest_account_id
 from mmex_domain.recon_commit import apply_operations, count_amount_adjustments
 from mmex_recon.balance import check_pdf_balances
-from mmex_recon.matcher import TOLERANCE_DAYS, load_candidates, match_all, supplement_foreign_amounts
+from mmex_recon.matcher import load_candidates, match_all, supplement_foreign_amounts
 from mmex_recon.parsers.registry import registry
 from mmex_recon.schemas import MatchStatus, ParsedStatement, ReconciliationSession, TransactionMatch
 from mmex_web_api.config import Settings
@@ -109,8 +110,9 @@ def build_session(
         return payload
     dates = [t.date for t in txs]
     dates.extend(t.value_date for t in txs if t.value_date)
-    start = min(dates) - timedelta(days=TOLERANCE_DAYS)
-    end = max(dates) + timedelta(days=TOLERANCE_DAYS)
+    tolerance_days, amount_delta = recon_window(engine)
+    start = min(dates) - timedelta(days=tolerance_days)
+    end = max(dates) + timedelta(days=tolerance_days)
     credit_card = _credit_card(engine, account_id)
     account_name = _account_name(engine, account_id)
     mmex = load_candidates(engine, account_id, start, end)
@@ -128,6 +130,8 @@ def build_session(
         mmex,
         credit_card=credit_card,
         statement_account_name=account_name,
+        tolerance_days=tolerance_days,
+        amount_delta=amount_delta,
     )
     session = ReconciliationSession(
         source=f"paperless:{paperless_id}",

@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { SortTh, sortBy, toggleSort, type SortState } from "./Sortable";
 import { api } from "./api";
 import type { MessageKey } from "./i18n";
+import { cents } from "./money";
 import { writeTheme } from "./theme";
 
 type Currency = {
@@ -34,6 +35,8 @@ type Settings = {
   theme: "system" | "light" | "dark";
   show_closed_accounts: boolean;
   default_account_id: number | null;
+  recon_date_days: number;
+  recon_amount_delta: string;
 };
 
 type Acct = { account_id: number; name: string; status: string; account_type: string };
@@ -42,6 +45,60 @@ type Props = {
   t: (key: MessageKey) => string;
   onChanged: () => void;
 };
+
+function Card({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="settings-card">
+      <header>
+        <h3>{title}</h3>
+        <p className="k">{hint}</p>
+      </header>
+      <div className="settings-grid">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  wide,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <label className={wide ? "settings-span" : undefined}>
+      <span className="field-label">{label}</span>
+      {children}
+      {hint ? <span className="field-hint">{hint}</span> : null}
+    </label>
+  );
+}
+
+function Check({
+  checked,
+  title,
+  hint,
+  onChange,
+}: {
+  checked: boolean;
+  title: string;
+  hint?: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="settings-check settings-span">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <strong>{title}</strong>
+        {hint ? <span className="field-hint">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}
 
 export function Settings({ t, onChanged }: Props) {
   const [data, setData] = useState<Settings | null>(null);
@@ -74,6 +131,13 @@ export function Settings({ t, onChanged }: Props) {
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (!data) return;
+    const amount = cents(data.recon_amount_delta);
+    const gap = Number(amount);
+    if (!amount || !Number.isFinite(gap) || gap < 0 || gap > 10000) {
+      setError(t("reconAmountRequired"));
+      setSaved(false);
+      return;
+    }
     setError(null);
     setSaved(false);
     try {
@@ -90,6 +154,8 @@ export function Settings({ t, onChanged }: Props) {
         theme: data.theme,
         show_closed_accounts: data.show_closed_accounts,
         default_account_id: data.default_account_id ?? 0,
+        recon_date_days: data.recon_date_days,
+        recon_amount_delta: amount,
       });
       setData(body);
       writeTheme(body.theme);
@@ -162,255 +228,337 @@ export function Settings({ t, onChanged }: Props) {
     (c, k) => (k === "rate" ? c.rate : k === "used" ? c.used_count : k === "name" ? c.name : c.symbol),
   );
   const histShown = sortBy(history, histSort, (h, k) => (k === "rate" ? h.rate : h.date));
+  const entryAccounts = accounts.filter(
+    (a) => a.account_type !== "Investment" && a.account_type !== "Shares",
+  );
 
   return (
-    <section className="panel">
-      <h2>{t("settings")}</h2>
+    <section className="panel settings-page">
+      <header className="settings-head">
+        <h2>{t("settings")}</h2>
+        <p className="k">{t("settingsIntro")}</p>
+      </header>
       {error && <p className="error-text">{error}</p>}
-      <form className="mgr-form" onSubmit={onSave}>
-        <label>
-          {t("username")}
-          <input
-            value={data.username}
-            onChange={(e) => setData({ ...data, username: e.target.value })}
-          />
-        </label>
-        <label>
-          {t("ioDateFormat")}
-          <select
-            value={data.date_format}
-            onChange={(e) => setData({ ...data, date_format: e.target.value })}
-          >
-            {data.meta.date_formats.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.id}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("ioDelimiter")}
-          <select
-            value={data.delimiter === "\t" ? "\\t" : data.delimiter}
-            onChange={(e) => setData({ ...data, delimiter: e.target.value })}
-          >
-            <option value=",">,</option>
-            <option value=";">;</option>
-            <option value={"\\t"}>TAB</option>
-            <option value="|">|</option>
-          </select>
-        </label>
-        <label>
-          {t("categDelimiter")}
-          <input
-            value={data.categ_delimiter}
-            onChange={(e) => setData({ ...data, categ_delimiter: e.target.value })}
-          />
-        </label>
-        <label>
-          {t("fyDay")}
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={data.financial_year_start_day}
-            onChange={(e) =>
-              setData({ ...data, financial_year_start_day: Number(e.target.value) || 1 })
-            }
-          />
-        </label>
-        <label>
-          {t("fyMonth")}
-          <input
-            type="number"
-            min={1}
-            max={12}
-            value={data.financial_year_start_month}
-            onChange={(e) =>
-              setData({ ...data, financial_year_start_month: Number(e.target.value) || 1 })
-            }
-          />
-        </label>
-        <label>
-          {t("sharePrecision")}
-          <input
-            type="number"
-            min={0}
-            max={10}
-            value={data.share_precision}
-            onChange={(e) =>
-              setData({ ...data, share_precision: Number(e.target.value) || 0 })
-            }
-          />
-        </label>
-        <label>
-          {t("stockUrl")}
-          <input
-            value={data.stock_url}
-            onChange={(e) => setData({ ...data, stock_url: e.target.value })}
-          />
-        </label>
-        <label className="chk">
-          <input
-            type="checkbox"
-            checked={data.use_currency_history}
-            onChange={(e) => setData({ ...data, use_currency_history: e.target.checked })}
-          />
-          {t("useCurrencyHistory")}
-        </label>
-        <label>
-          {t("theme")}
-          <select
-            value={data.theme}
-            onChange={(e) => {
-              const theme = e.target.value as Settings["theme"];
-              setData({ ...data, theme });
-              writeTheme(theme);
-            }}
-          >
-            <option value="system">{t("themeSystem")}</option>
-            <option value="light">{t("themeLight")}</option>
-            <option value="dark">{t("themeDark")}</option>
-          </select>
-        </label>
-        <label className="chk">
-          <input
-            type="checkbox"
+      <form className="settings-form" onSubmit={onSave}>
+        <Card title={t("settingsAppearance")} hint={t("settingsAppearanceHint")}>
+          <Field label={t("theme")}>
+            <select
+              value={data.theme}
+              onChange={(e) => {
+                const theme = e.target.value as Settings["theme"];
+                setData({ ...data, theme });
+                writeTheme(theme);
+              }}
+            >
+              <option value="system">{t("themeSystem")}</option>
+              <option value="light">{t("themeLight")}</option>
+              <option value="dark">{t("themeDark")}</option>
+            </select>
+          </Field>
+          <Check
             checked={data.show_closed_accounts}
-            onChange={(e) => setData({ ...data, show_closed_accounts: e.target.checked })}
+            title={t("showClosed")}
+            onChange={(checked) => setData({ ...data, show_closed_accounts: checked })}
           />
-          {t("showClosed")}
-        </label>
-        <label>
-          {t("defaultQuickAddAccount")}
-          <select
-            value={data.default_account_id ?? 0}
-            onChange={(e) =>
-              setData({ ...data, default_account_id: Number(e.target.value) || null })
-            }
-          >
-            <option value={0}>{t("none")}</option>
-            {accounts
-              .filter((a) => a.account_type !== "Investment" && a.account_type !== "Shares")
-              .map((a) => (
+        </Card>
+
+        <Card title={t("settingsEntry")} hint={t("settingsEntryHint")}>
+          <Field label={t("defaultQuickAddAccount")}>
+            <select
+              value={data.default_account_id ?? 0}
+              onChange={(e) =>
+                setData({ ...data, default_account_id: Number(e.target.value) || null })
+              }
+            >
+              <option value={0}>{t("none")}</option>
+              {entryAccounts.map((a) => (
                 <option key={a.account_id} value={a.account_id}>
                   {a.name}
                   {a.status === "Closed" ? ` (${t("closedBadge")})` : ""}
                 </option>
               ))}
-          </select>
-        </label>
-        <div className="mgr-actions">
+            </select>
+          </Field>
+        </Card>
+
+        <Card title={t("settingsRecon")} hint={t("settingsReconHint")}>
+          <Field label={t("reconDateDays")} hint={t("reconDateDaysHint")}>
+            <input
+              type="number"
+              min={0}
+              max={60}
+              step={1}
+              inputMode="numeric"
+              value={data.recon_date_days}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") {
+                  setData({ ...data, recon_date_days: 0 });
+                  return;
+                }
+                const days = Math.trunc(Number(raw));
+                if (!Number.isFinite(days)) return;
+                setData({ ...data, recon_date_days: Math.min(60, Math.max(0, days)) });
+              }}
+            />
+          </Field>
+          <Field label={t("reconAmountDelta")} hint={t("reconAmountDeltaHint")}>
+            <input
+              inputMode="decimal"
+              value={data.recon_amount_delta}
+              onChange={(e) => setData({ ...data, recon_amount_delta: e.target.value })}
+              onBlur={() =>
+                setData((current) =>
+                  current
+                    ? {
+                        ...current,
+                        recon_amount_delta:
+                          cents(current.recon_amount_delta) || current.recon_amount_delta,
+                      }
+                    : current,
+                )
+              }
+            />
+          </Field>
+        </Card>
+
+        <Card title={t("settingsLedger")} hint={t("settingsLedgerHint")}>
+          <Field label={t("username")} hint={t("settingsUserHint")}>
+            <input
+              value={data.username}
+              onChange={(e) => setData({ ...data, username: e.target.value })}
+            />
+          </Field>
+          <Field label={t("ioDateFormat")} hint={t("settingsDateHint")}>
+            <select
+              value={data.date_format}
+              onChange={(e) => setData({ ...data, date_format: e.target.value })}
+            >
+              {data.meta.date_formats.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.id}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t("fyDay")} hint={t("settingsFyHint")}>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={data.financial_year_start_day}
+              onChange={(e) =>
+                setData({ ...data, financial_year_start_day: Number(e.target.value) || 1 })
+              }
+            />
+          </Field>
+          <Field label={t("fyMonth")}>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={data.financial_year_start_month}
+              onChange={(e) =>
+                setData({ ...data, financial_year_start_month: Number(e.target.value) || 1 })
+              }
+            />
+          </Field>
+          <Field label={t("categDelimiter")} hint={t("settingsCategHint")}>
+            <input
+              value={data.categ_delimiter}
+              onChange={(e) => setData({ ...data, categ_delimiter: e.target.value })}
+            />
+          </Field>
+        </Card>
+
+        <Card title={t("settingsFiles")} hint={t("settingsFilesHint")}>
+          <Field label={t("ioDelimiter")}>
+            <select
+              value={data.delimiter === "\t" ? "\\t" : data.delimiter}
+              onChange={(e) => setData({ ...data, delimiter: e.target.value })}
+            >
+              <option value=",">,</option>
+              <option value=";">;</option>
+              <option value={"\\t"}>TAB</option>
+              <option value="|">|</option>
+            </select>
+          </Field>
+        </Card>
+
+        <Card title={t("settingsStocks")} hint={t("settingsStocksHint")}>
+          <Field label={t("sharePrecision")}>
+            <input
+              type="number"
+              min={0}
+              max={10}
+              value={data.share_precision}
+              onChange={(e) => setData({ ...data, share_precision: Number(e.target.value) || 0 })}
+            />
+          </Field>
+          <Field label={t("stockUrl")} wide>
+            <input
+              value={data.stock_url}
+              onChange={(e) => setData({ ...data, stock_url: e.target.value })}
+            />
+          </Field>
+        </Card>
+
+        <Card title={t("settingsCurrency")} hint={t("settingsCurrencyHint")}>
+          <Check
+            checked={data.use_currency_history}
+            title={t("useCurrencyHistory")}
+            onChange={(checked) => setData({ ...data, use_currency_history: checked })}
+          />
+        </Card>
+
+        <div className="settings-save">
+          {saved && <span className="settings-saved">{t("settingsSaved")}</span>}
           <button type="submit">{t("save")}</button>
-          {saved && <span className="k">✓</span>}
         </div>
       </form>
 
-      <h3>{t("baseCurrency")}</h3>
-      <p className="k">
-        {data.base_currency_name} ({data.base_currency_symbol})
-      </p>
-      <label>
-        {t("setBaseCurrency")}
-        <select
-          value={data.base_currency_id}
-          onChange={(e) => void onBase(Number(e.target.value))}
-        >
-          {data.currencies
-            .filter((c) => c.used_count > 0 || c.is_base)
-            .map((c) => (
-              <option key={c.currency_id} value={c.currency_id}>
-                {c.symbol} — {c.name}
-              </option>
-            ))}
-        </select>
-      </label>
-
-      <h3>{t("rates")}</h3>
-      <p className="k">{t("ratesHint")}</p>
-      <table className="mgr-table">
-        <thead>
-          <tr>
-            <SortTh label={t("symbol")} k="symbol" sort={rateSort} onSort={(k) => setRateSort((s) => toggleSort(s, k))} />
-            <SortTh label={t("name")} k="name" sort={rateSort} onSort={(k) => setRateSort((s) => toggleSort(s, k))} />
-            <SortTh label={t("rate")} k="rate" sort={rateSort} onSort={(k) => setRateSort((s) => toggleSort(s, k))} className="num" />
-            <SortTh label={t("used")} k="used" sort={rateSort} onSort={(k) => setRateSort((s) => toggleSort(s, k))} />
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {used.map((row) => (
-            <tr key={row.currency_id} className={selected === row.currency_id ? "selected" : undefined}>
-              <td>
-                {row.symbol}
-                {row.is_base ? ` (${t("baseCurrencyFlag")})` : ""}
-              </td>
-              <td>{row.name}</td>
-              <td className="num">{row.rate}</td>
-              <td>{row.used_count}</td>
-              <td>
-                <button type="button" className="ghost" onClick={() => void openHistory(row.currency_id)}>
-                  {t("priceHistory")}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {selected != null && (
-        <>
-          <h4>{t("priceHistory")}</h4>
-          <form className="mgr-form" onSubmit={saveRate}>
-            <label>
-              {t("date")}
-              <input
-                type="date"
-                value={rateForm.date}
-                onChange={(e) => setRateForm({ ...rateForm, date: e.target.value })}
-                required
-              />
-            </label>
-            <label>
-              {t("rate")}
-              <input
-                value={rateForm.rate}
-                onChange={(e) => setRateForm({ ...rateForm, rate: e.target.value })}
-                required
-              />
-            </label>
-            <div className="mgr-actions">
-              <button type="submit">{t("save")}</button>
-            </div>
-          </form>
-          {history.length === 0 ? (
-            <p className="k">{t("noData")}</p>
-          ) : (
-            <table className="mgr-table">
-              <thead>
-                <tr>
-                  <SortTh label={t("date")} k="date" sort={histSort} onSort={(k) => setHistSort((s) => toggleSort(s, k))} />
-                  <SortTh label={t("rate")} k="rate" sort={histSort} onSort={(k) => setHistSort((s) => toggleSort(s, k))} className="num" />
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {histShown.map((row) => (
-                  <tr key={row.hist_id}>
-                    <td>{row.date}</td>
-                    <td className="num">{row.rate}</td>
-                    <td>
-                      <button type="button" className="ghost" onClick={() => void removeRate(row.hist_id)}>
-                        ×
-                      </button>
-                    </td>
-                  </tr>
+      <section className="settings-card settings-currency">
+        <header>
+          <h3>{t("rates")}</h3>
+          <p className="k">{t("settingsRatesLive")}</p>
+        </header>
+        <div className="settings-grid">
+          <Field label={t("setBaseCurrency")}>
+            <select
+              value={data.base_currency_id}
+              onChange={(e) => void onBase(Number(e.target.value))}
+            >
+              {data.currencies
+                .filter((c) => c.used_count > 0 || c.is_base)
+                .map((c) => (
+                  <option key={c.currency_id} value={c.currency_id}>
+                    {c.symbol} — {c.name}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </>
-      )}
+            </select>
+          </Field>
+          <p className="k settings-span">
+            {t("baseCurrency")}: {data.base_currency_name} ({data.base_currency_symbol})
+          </p>
+        </div>
+        <p className="k">{t("ratesHint")}</p>
+        <div className="settings-table">
+          <table className="mgr-table">
+            <thead>
+              <tr>
+                <SortTh
+                  label={t("symbol")}
+                  k="symbol"
+                  sort={rateSort}
+                  onSort={(k) => setRateSort((s) => toggleSort(s, k))}
+                />
+                <SortTh
+                  label={t("name")}
+                  k="name"
+                  sort={rateSort}
+                  onSort={(k) => setRateSort((s) => toggleSort(s, k))}
+                />
+                <SortTh
+                  label={t("rate")}
+                  k="rate"
+                  sort={rateSort}
+                  onSort={(k) => setRateSort((s) => toggleSort(s, k))}
+                  className="num"
+                />
+                <SortTh
+                  label={t("used")}
+                  k="used"
+                  sort={rateSort}
+                  onSort={(k) => setRateSort((s) => toggleSort(s, k))}
+                />
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {used.map((row) => (
+                <tr key={row.currency_id} className={selected === row.currency_id ? "selected" : undefined}>
+                  <td>
+                    {row.symbol}
+                    {row.is_base ? ` (${t("baseCurrencyFlag")})` : ""}
+                  </td>
+                  <td>{row.name}</td>
+                  <td className="num">{row.rate}</td>
+                  <td>{row.used_count}</td>
+                  <td>
+                    <button type="button" className="ghost" onClick={() => void openHistory(row.currency_id)}>
+                      {t("priceHistory")}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {selected != null && (
+          <>
+            <h4>{t("priceHistory")}</h4>
+            <form className="settings-grid" onSubmit={saveRate}>
+              <Field label={t("date")}>
+                <input
+                  type="date"
+                  value={rateForm.date}
+                  onChange={(e) => setRateForm({ ...rateForm, date: e.target.value })}
+                  required
+                />
+              </Field>
+              <Field label={t("rate")}>
+                <input
+                  value={rateForm.rate}
+                  onChange={(e) => setRateForm({ ...rateForm, rate: e.target.value })}
+                  required
+                />
+              </Field>
+              <div className="mgr-actions">
+                <button type="submit">{t("save")}</button>
+              </div>
+            </form>
+            {history.length === 0 ? (
+              <p className="k">{t("noData")}</p>
+            ) : (
+              <div className="settings-table">
+                <table className="mgr-table">
+                  <thead>
+                    <tr>
+                      <SortTh
+                        label={t("date")}
+                        k="date"
+                        sort={histSort}
+                        onSort={(k) => setHistSort((s) => toggleSort(s, k))}
+                      />
+                      <SortTh
+                        label={t("rate")}
+                        k="rate"
+                        sort={histSort}
+                        onSort={(k) => setHistSort((s) => toggleSort(s, k))}
+                        className="num"
+                      />
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {histShown.map((row) => (
+                      <tr key={row.hist_id}>
+                        <td>{row.date}</td>
+                        <td className="num">{row.rate}</td>
+                        <td>
+                          <button type="button" className="ghost" onClick={() => void removeRate(row.hist_id)}>
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </section>
     </section>
   );
 }

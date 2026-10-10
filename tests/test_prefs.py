@@ -108,3 +108,67 @@ def test_web_prefs_and_account_properties(
     assert busy.status_code == 409
     gone = authed_client.delete(f"/api/accounts/{new_id}")
     assert gone.status_code == 200
+
+
+def test_recon_match_window(authed_client: TestClient, mmex_settings: Settings) -> None:
+    _seed(mmex_settings)
+    got = authed_client.get("/api/settings")
+    assert got.status_code == 200, got.text
+    assert got.json()["recon_date_days"] == 4
+    assert got.json()["recon_amount_delta"] == "1.00"
+    username = got.json()["username"]
+
+    saved = authed_client.put(
+        "/api/settings",
+        json={"recon_date_days": 7, "recon_amount_delta": "2,50"},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["recon_date_days"] == 7
+    assert saved.json()["recon_amount_delta"] == "2.50"
+    assert saved.json()["theme"] == "system"
+
+    kept = authed_client.put("/api/settings", json={"theme": "dark"})
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["theme"] == "dark"
+    assert kept.json()["recon_date_days"] == 7
+    assert kept.json()["recon_amount_delta"] == "2.50"
+
+    rejected = authed_client.put(
+        "/api/settings",
+        json={"username": "should-not-stick", "recon_date_days": 99},
+    )
+    assert rejected.status_code == 400
+    assert authed_client.put("/api/settings", json={"recon_date_days": -1}).status_code == 400
+    assert authed_client.put("/api/settings", json={"recon_amount_delta": "-1"}).status_code == 400
+    assert authed_client.put("/api/settings", json={"recon_amount_delta": "nope"}).status_code == 400
+    still = authed_client.get("/api/settings").json()
+    assert still["username"] == username
+    assert still["recon_date_days"] == 7
+    assert still["recon_amount_delta"] == "2.50"
+
+    zero = authed_client.put(
+        "/api/settings",
+        json={"recon_date_days": 0, "recon_amount_delta": "0"},
+    )
+    assert zero.status_code == 200, zero.text
+    assert zero.json()["recon_date_days"] == 0
+    assert zero.json()["recon_amount_delta"] == "0.00"
+
+    engine = create_engine(f"sqlite:///{mmex_settings.db_path}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE SETTING_V1 SET SETTINGVALUE = 'nope' "
+                "WHERE SETTINGNAME = 'MMEXWEB_RECON_DAYS'"
+            )
+        )
+        conn.execute(
+            text(
+                "UPDATE SETTING_V1 SET SETTINGVALUE = '-5' "
+                "WHERE SETTINGNAME = 'MMEXWEB_RECON_AMOUNT'"
+            )
+        )
+    engine.dispose()
+    fallback = authed_client.get("/api/settings").json()
+    assert fallback["recon_date_days"] == 4
+    assert fallback["recon_amount_delta"] == "1.00"

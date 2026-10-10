@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
-from mmex_domain.kv import save_web_prefs, web_prefs
+from mmex_domain.kv import parse_recon_amount, parse_recon_days, save_web_prefs, web_prefs
 from mmex_domain.money import as_decimal
 
 UPD_MANUAL = 2
@@ -165,6 +165,14 @@ def get_settings(engine: Engine) -> dict[str, Any]:
 
 
 def update_settings(engine: Engine, data: dict[str, Any]) -> dict[str, Any]:
+    # Reject a bad window before the ledger options are written.
+    try:
+        if data.get("recon_date_days") is not None:
+            parse_recon_days(data["recon_date_days"])
+        if data.get("recon_amount_delta") is not None:
+            parse_recon_amount(data["recon_amount_delta"])
+    except ValueError as exc:
+        raise SettingsError(str(exc)) from exc
     with engine.begin() as conn:
         if "username" in data:
             _set_info(conn, "USERNAME", str(data.get("username") or ""))
@@ -209,7 +217,13 @@ def update_settings(engine: Engine, data: dict[str, Any]) -> dict[str, Any]:
             _set_info(conn, "SHARE_PRECISION", str(prec))
     prefs = {
         k: data[k]
-        for k in ("theme", "show_closed_accounts", "default_account_id")
+        for k in (
+            "theme",
+            "show_closed_accounts",
+            "default_account_id",
+            "recon_date_days",
+            "recon_amount_delta",
+        )
         if k in data
     }
     if prefs:
