@@ -7,6 +7,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pdfplumber
+
 from mmex_recon.schemas import BankTransaction, ParsedStatement
 from mmex_recon.parsers.base import BaseParser
 
@@ -33,18 +35,20 @@ class SwissVisaParser(BaseParser):
         return "numéro de compte" in header and "cashback" in header
 
     def parse(self, pdf_path: Path) -> ParsedStatement:
-        text = self.extract_text(pdf_path)
+        text = self._layout_text(pdf_path)
         account_number = self._extract_account_number(text)
         period_start, period_end = self._extract_period(text)
         opening, closing, closing_in_customer_favor = self._extract_balances(text)
         currency = "CHF"
-
         transactions = self._extract_transactions(text)
+        hint = "Visa Cashback"
+        if re.search(r"world\s*mastercard", text, re.IGNORECASE):
+            hint = "Mastercard cashback"
 
         return ParsedStatement(
             parser_id=self.parser_id,
             bank_name=self.bank_name,
-            account_hint="Visa Cashback",
+            account_hint=hint,
             account_number=account_number,
             period_start=period_start,
             period_end=period_end,
@@ -59,8 +63,19 @@ class SwissVisaParser(BaseParser):
             },
         )
 
+    def _layout_text(self, pdf_path: Path) -> str:
+        """Cashback PDFs glue words at pdfplumber's default gap. Keep them apart."""
+        parts: list[str] = []
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text(x_tolerance=1.5) or ""
+                if text:
+                    parts.append(text)
+        laid_out = "\n".join(parts)
+        return laid_out or self.extract_text(pdf_path)
+
     def _extract_account_number(self, text: str) -> str | None:
-        match = re.search(r"Numéro de compte\s+([\d\s']+)", text)
+        match = re.search(r"Numéro\s*de\s*compte\s+([\d\s']+)", text)
         if match:
             return match.group(1).strip()
         match = re.search(r"Cashback\s+([\d\s']+)", text)
@@ -68,7 +83,7 @@ class SwissVisaParser(BaseParser):
 
     def _extract_period(self, text: str) -> tuple[date | None, date | None]:
         match = re.search(
-            r"Période de facturation\s+(\d{2}\.\d{2}\.\d{2})\s*[–-]\s*(\d{2}\.\d{2}\.\d{2})",
+            r"Période\s*de\s*facturation\s+(\d{2}\.\d{2}\.\d{2})\s*[–-]\s*(\d{2}\.\d{2}\.\d{2})",
             text,
         )
         if match:
@@ -98,8 +113,8 @@ class SwissVisaParser(BaseParser):
         in_favor = self._closing_in_customer_favor(text)
 
         match = re.search(
-            r"Solde dernière\s+.*?facture\s+.*?"
-            rf"CHF\s+({amount})\s+CHF\s+{amount}\s+CHF\s+{amount}\s+CHF\s+({amount})",
+            r"Solde\s*dernière\s+.*?facture\s+.*?"
+            rf"CHF\s*({amount})\s+CHF\s*{amount}\s+CHF\s*{amount}\s+CHF\s*({amount})",
             text,
             re.DOTALL | re.IGNORECASE,
         )
@@ -175,10 +190,15 @@ class SwissVisaParser(BaseParser):
             re.IGNORECASE,
         )
         card_header = re.compile(
-            r"^\d{4}\s+\d{2}XXXX\s+X\d{4}\s+(.+?)\s+Cashback"
+            r"^(\d[\d\sX]{8,28})\s+(.+?)\s+Cashback\b",
+            re.IGNORECASE,
         )
-        payments_header = re.compile(r"^Vos\s+paiements(?:\s|$)", re.IGNORECASE)
-        transactions_header = re.compile(r"^Nouvelles\s+transactions(?:\s|$)", re.IGNORECASE)
+        glued_card = re.compile(
+            r"^(\d{6}X+\d{4})(.+?)Cashback",
+            re.IGNORECASE,
+        )
+        payments_header = re.compile(r"^Vos\s*paiements(?:\s|$)", re.IGNORECASE)
+        transactions_header = re.compile(r"^Nouvelles\s*transactions(?:\s|$)", re.IGNORECASE)
         # Sections de crédits / avoirs éventuelles
         credits_header = re.compile(
             r"^(Vos\s+crédits|Nouveaux\s+crédits|Crédits|Avoirs)\b",
@@ -199,12 +219,12 @@ class SwissVisaParser(BaseParser):
             if credits_header.match(line):
                 section = "credits"
                 continue
-            if line.startswith("Total des nouvelles transactions"):
+            if re.match(r"^Total\s*des\s*nouvelles\s*transactions", line, re.IGNORECASE):
                 break
 
-            card_match = card_header.match(line)
+            card_match = card_header.match(line) or glued_card.match(line)
             if card_match:
-                current_holder = card_match.group(1).strip()
+                current_holder = card_match.group(2).strip()
                 section = "transactions"
                 continue
 
