@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Event, Thread
@@ -17,6 +18,7 @@ from mmex_domain.version import read_schema_status
 from mmex_web_api.backup import backup_database, latest_backup
 from mmex_web_api.config import Settings, load_settings
 from mmex_web_api.db import make_engine
+from mmex_web_api.due_job import record_due_job
 from mmex_web_api.lock import WriterLock
 from mmex_web_api.routes_ledger import router as ledger_router
 from mmex_web_api.routes_managers import router as managers_router
@@ -34,7 +36,8 @@ from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
 from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.16.9"
+APP_VERSION = "1.16.10"
+logger = logging.getLogger(__name__)
 
 
 class AppState:
@@ -44,6 +47,7 @@ class AppState:
         self.last_backup: Path | None = None
         self.engine: Engine | None = None
         self.recon_sessions: dict[str, dict[str, Any]] = {}
+        self.due_job: dict[str, Any] | None = None
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -70,23 +74,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.mmex = state
         stop = Event()
 
-        def _due_loop() -> None:
+        def _run_due() -> None:
             from mmex_domain.scheduled import process_due_silent
 
-            if state.engine is not None and not state.lock.read_only:
-                try:
-                    backup_database(settings.db_path, settings.backups_dir, keep=settings.backup_keep)
-                    process_due_silent(state.engine)
-                except Exception:
-                    pass
+            if state.engine is None or state.lock.read_only:
+                return
+            try:
+                backup_database(settings.db_path, settings.backups_dir, keep=settings.backup_keep)
+                record_due_job(state, process_due_silent(state.engine))
+            except Exception as exc:
+                record_due_job(state, error=str(exc))
+                logger.exception("scheduled due job failed")
+
+        def _due_loop() -> None:
             while not stop.wait(3600):
-                if state.engine is None or state.lock.read_only:
-                    continue
-                try:
-                    backup_database(settings.db_path, settings.backups_dir, keep=settings.backup_keep)
-                    process_due_silent(state.engine)
-                except Exception:
-                    pass
+                _run_due()
+
+        _run_due()
 
         worker = Thread(target=_due_loop, name="mmex-due-job", daemon=True)
         worker.start()
@@ -150,6 +154,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "url": settings.paperless_url or None,
                 "inbox_tag": settings.paperless_inbox_tag,
             },
+            "scheduled_job": state.due_job,
         }
 
     @app.get("/api/info")

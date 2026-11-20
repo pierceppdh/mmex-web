@@ -21,6 +21,13 @@ export type Health = {
     url: string | null;
     inbox_tag: string;
   };
+  scheduled_job?: {
+    at: string;
+    entered: number;
+    ended: number;
+    errors: string[];
+    failed: boolean;
+  } | null;
 };
 
 export type Account = {

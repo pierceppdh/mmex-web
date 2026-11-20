@@ -18,6 +18,7 @@ from mmex_web_api.deps import (
     get_settings,
     require_write,
 )
+from mmex_web_api.inbox_cache import cache_path, retain
 from mmex_web_api.paperless import (
     PaperlessError,
     download_document,
@@ -59,6 +60,8 @@ def inbox(
             unmapped.append(item)
         else:
             by_account.setdefault(aid, []).append(item)
+    if settings.paperless_url and settings.paperless_token:
+        retain(cache_path(settings.mmex_data_dir), {int(item["id"]) for item in documents})
     return {
         "configured": bool(settings.paperless_url and settings.paperless_token),
         "inbox_tag": settings.paperless_inbox_tag,

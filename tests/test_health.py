@@ -29,7 +29,7 @@ def test_health_ok_with_fixture_db(tmp_path: Path) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["version"] == "1.16.9"
+    assert body["version"] == "1.16.10"
     assert body["paperless"]["configured"] is False
     assert body["db"]["exists"] is True
     assert body["db"]["info_table"]["DATAVERSION"] == "3"
@@ -37,6 +37,10 @@ def test_health_ok_with_fixture_db(tmp_path: Path) -> None:
     assert body["lock"]["acquired"] is True
     assert body["lock"]["read_only"] is False
     assert body["last_backup"] is not None
+    job = body["scheduled_job"]
+    assert job["failed"] is False
+    assert job["errors"] == []
+    assert "at" in job
 
 
 def test_health_degraded_without_db(tmp_path: Path) -> None:
@@ -48,3 +52,4 @@ def test_health_degraded_without_db(tmp_path: Path) -> None:
     assert body["status"] == "degraded"
     assert body["db"]["exists"] is False
     assert body["last_backup"] is None
+    assert body["scheduled_job"] is None

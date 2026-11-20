@@ -4,7 +4,7 @@ Local-network web client for [Money Manager Ex](https://github.com/moneymanagere
 It opens the official `.mmb` SQLite ledger. It is **not** a remote desktop of the wxWidgets app
 and **not** the PHP capture WebApp.
 
-**Status:** PR 16 — mobile quick-add (writes the real `.mmb`) and optional ingest of the PHP WebApp sidecar so port **9080** can be retired. Réconciliation Paperless (`Nouveau-Relevé`): list inbox, parse PDF, fuzzy-match, and commit (`STATUS=R`) while mmex-web holds the writer lock.
+**Status:** LAN ledger. Mobile quick-add writes the real `.mmb`. Réconciliation Paperless (`Nouveau-Relevé`) lists the inbox, parses each PDF, fuzzy-matches ledger rows, and commits (`STATUS=R`) while mmex-web holds the writer lock. The date and amount window is in Settings (defaults: 4 days and 1.00).
 
 There is no login. The app is meant for the home LAN, with remote use through the VPN. Anyone who can open the port can read and write the ledger.
 
@@ -17,6 +17,8 @@ uv sync --extra dev
 uv run pytest
 uv run uvicorn mmex_web_api.main:app --host 127.0.0.1 --port 8080 --workers 1
 ```
+
+`.python-version` pins 3.12, the same interpreter as the image. Do not use the system 3.15: it has no wheels for this stack and no C compiler. `uvicorn[standard]` (httptools) is an optional extra used only by the Docker image, not by tests.
 
 UI (optional, proxies `/api` to 8080):
 
@@ -58,6 +60,6 @@ To empty leftover PHP WebApp reminders: host `/data/webmmxapp` is mounted and `W
 ```
 apps/api          FastAPI
 apps/web          Vite + React
-packages/mmex-domain   schema inspection (later: balances, repeats)
+packages/mmex-domain   balances, transactions, scheduled, reports
 vendor/database   upstream tables.sql
 ```

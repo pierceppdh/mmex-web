@@ -53,6 +53,14 @@ function formFromBill(bill: Bill): typeof EMPTY {
   };
 }
 
+type DueJob = {
+  at: string;
+  entered: number;
+  ended: number;
+  errors: string[];
+  failed: boolean;
+};
+
 type Props = {
   accounts: Account[];
   locale: "fr" | "en";
@@ -101,15 +109,17 @@ export function Scheduled({ accounts, locale, t, onChanged }: Props) {
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dueJob, setDueJob] = useState<DueJob | null>(null);
 
   async function load() {
     const [list, m, c] = await Promise.all([
-      api.get<{ scheduled: Bill[]; overdue: number }>("/api/scheduled"),
+      api.get<{ scheduled: Bill[]; overdue: number; due_job: DueJob | null }>("/api/scheduled"),
       api.get<{ repeat_types: RepeatMeta[]; auto_modes: RepeatMeta[] }>("/api/scheduled/meta"),
       api.get<{ categories: Category[] }>("/api/categories"),
     ]);
     setRows(list.scheduled);
     setOverdue(list.overdue);
+    setDueJob(list.due_job);
     setMeta(m);
     setCategories(c.categories);
     if (!form.account_id && accounts[0]) {
@@ -190,6 +200,14 @@ export function Scheduled({ accounts, locale, t, onChanged }: Props) {
           {t("enterDue")}
         </button>
       </header>
+      {dueJob ? (
+        <p className={dueJob.failed || dueJob.errors.length ? "error-text due-job" : "due-job"}>
+          {t("dueJobLead")} · {new Date(dueJob.at).toLocaleString(locale)} · {dueJob.entered}{" "}
+          {t("dueJobEntered")}
+          {dueJob.failed ? ` · ${t("dueJobFailed")}` : ""}
+          {dueJob.errors.length ? ` — ${dueJob.errors.join("; ")}` : ""}
+        </p>
+      ) : null}
       <form className="mgr-form" onSubmit={onSubmit}>
         <label>
           {t("account")}

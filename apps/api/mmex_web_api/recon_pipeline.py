@@ -20,6 +20,7 @@ from mmex_recon.matcher import load_candidates, match_all, supplement_foreign_am
 from mmex_recon.parsers.registry import registry
 from mmex_recon.schemas import MatchStatus, ParsedStatement, ReconciliationSession, TransactionMatch
 from mmex_web_api.config import Settings
+from mmex_web_api.inbox_cache import _MISS, cache_path, lookup, store
 from mmex_web_api.paperless import download_document
 
 logger = logging.getLogger(__name__)
@@ -52,17 +53,32 @@ def suggest_inbox_account_id(
     doc: dict[str, Any],
     accounts: list[dict[str, Any]],
 ) -> int | None:
-    """Same PDF match as opening recon; filename only if parse fails."""
-    name = str(doc.get("original_file_name") or doc.get("title") or f"doc-{doc.get('id')}.pdf")
+    """Same PDF match as opening recon; filename only if parse fails.
+
+    A Paperless checksum skips the download when this document was already mapped.
+    """
+    fingerprint = str(doc.get("checksum") or "").strip()
+    path = cache_path(settings.mmex_data_dir)
+    doc_id = int(doc["id"])
+    if fingerprint:
+        cached = lookup(path, doc_id, fingerprint)
+        if cached is not _MISS:
+            return cached if cached is None else int(cached)
+    name = str(doc.get("original_file_name") or doc.get("title") or f"doc-{doc_id}.pdf")
+    account_id: int | None = None
     try:
-        data, filename = download_document(settings, int(doc["id"]))
+        data, filename = download_document(settings, doc_id)
         statement = parse_pdf_bytes(data, filename or name)
         detected = match_statement_account(statement, accounts)
         if detected:
-            return int(detected["account_id"])
+            account_id = int(detected["account_id"])
     except Exception as exc:
-        logger.info("inbox parse for paperless %s: %s", doc.get("id"), exc)
-    return suggest_account_id(inbox_haystack(doc), accounts)
+        logger.info("inbox parse for paperless %s: %s", doc_id, exc)
+    if account_id is None:
+        account_id = suggest_account_id(inbox_haystack(doc), accounts)
+    if fingerprint:
+        store(path, doc_id, fingerprint, account_id)
+    return account_id
 
 
 def _credit_card(engine: Engine, account_id: int) -> bool:

@@ -30,7 +30,7 @@ sudo chown -R 1000:1000 /data/mmex-web
 Keep desktop MMEX closed (or read-only) while this stack holds the write lock.
 Yield the lock in the UI before a bank-reconciliation-app commit; take it back afterwards. Same file: `/data/mmex-web/data.mmb.lock`.
 
-Réconciliation inbox: add Dockhand env `PAPERLESS_URL` and `PAPERLESS_TOKEN` (tag `Nouveau-Relevé` by default). Those names must stay in `compose.yaml` `environment:` or the container never sees them. Matching/commit of PDF lines is not in this image yet; the menu lists pending statements mapped to accounts. Check `/api/health` → `paperless.configured`.
+Réconciliation inbox: add Dockhand env `PAPERLESS_URL` and `PAPERLESS_TOKEN` (tag `Nouveau-Relevé` by default). Those names must stay in `compose.yaml` `environment:` or the container never sees them. Opening a statement downloads the PDF, parses it, fuzzy-matches ledger rows, and commit sets `STATUS=R` while this process holds the writer lock. The date and amount window is a web preference (Settings; defaults 4 days and 1.00). The inbox list caches the guessed account by Paperless checksum, so it does not re-download every PDF. Check `/api/health` → `paperless.configured` and `scheduled_job`.
 
 Phone capture is **Saisie rapide** on 9090. The compose file bind-mounts host `/data/webmmxapp` and sets `WEBAPP_DB_PATH=/data/webmmxapp/MMEX_New_Transaction.db`. Ingest leftovers from **Outils → Ancienne WebApp**, then you can stop Dockhand stack `webmmxapp` (9080).
 

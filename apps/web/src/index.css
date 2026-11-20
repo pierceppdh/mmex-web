@@ -1509,6 +1509,16 @@ header p {
   color: var(--err);
 }
 
+.due-job {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.due-job.error-text {
+  color: var(--err);
+}
+
 h2 {
   font-size: 1.05rem;
   font-weight: 650;

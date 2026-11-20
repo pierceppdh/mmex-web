@@ -18,7 +18,7 @@ COPY apps/api ./apps/api
 COPY packages/mmex-domain ./packages/mmex-domain
 COPY packages/mmex-recon ./packages/mmex-recon
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir ".[standard]"
 
 COPY --from=web /web/dist /app/static
 RUN chown -R app:app /app

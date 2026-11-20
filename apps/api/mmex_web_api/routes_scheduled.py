@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.engine import Engine
 
@@ -28,6 +28,7 @@ from mmex_web_api.deps import (
     get_settings,
     require_write,
 )
+from mmex_web_api.due_job import record_due_job
 
 router = APIRouter(prefix="/api")
 
@@ -85,17 +86,29 @@ def scheduled_meta() -> dict[str, Any]:
 
 
 @router.get("/scheduled")
-def scheduled_list(engine: Engine = Depends(get_compatible_engine)) -> dict[str, Any]:
-    return list_scheduled(engine)
+def scheduled_list(
+    request: Request,
+    engine: Engine = Depends(get_compatible_engine),
+) -> dict[str, Any]:
+    body = list_scheduled(engine)
+    body["due_job"] = request.app.state.mmex.due_job
+    return body
 
 
 @router.post("/scheduled/process-due")
 def scheduled_process_due(
+    request: Request,
     engine: Engine = Depends(require_write),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     backup_database(settings.db_path, settings.backups_dir, keep=settings.backup_keep)
-    return process_due_silent(engine)
+    try:
+        result = process_due_silent(engine)
+    except Exception as exc:
+        record_due_job(request.app.state.mmex, error=str(exc))
+        raise
+    record_due_job(request.app.state.mmex, result)
+    return result
 
 
 @router.get("/scheduled/{bd_id}")

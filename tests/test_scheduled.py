@@ -102,6 +102,10 @@ def test_scheduled_enter_skip_once_and_silent_due(
     assert body["entered"] >= 2
     leftover = authed_client.get(f"/api/scheduled/{silent.json()['bd_id']}").json()
     assert leftover["next_occurrence_date"][:10] > today
+    listed = authed_client.get("/api/scheduled").json()
+    assert listed["due_job"]["entered"] >= 2
+    assert listed["due_job"]["failed"] is False
+    assert listed["due_job"]["errors"] == []
 
     meta = authed_client.get("/api/scheduled/meta").json()
     assert len(meta["repeat_types"]) == 17
