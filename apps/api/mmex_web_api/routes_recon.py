@@ -31,6 +31,7 @@ from mmex_web_api.recon_pipeline import (
     preview_document,
     suggest_inbox_account_id,
 )
+from mmex_web_api.session_store import SessionStore
 
 router = APIRouter(prefix="/api/recon")
 
@@ -124,8 +125,16 @@ class CommitIn(BaseModel):
     dry_run: bool = True
 
 
-def _sessions(request: Request) -> dict[str, dict[str, Any]]:
+def _sessions(request: Request) -> SessionStore:
     return request.app.state.mmex.recon_sessions
+
+
+@router.get("/sessions/open")
+def open_session(paperless_id: int, request: Request) -> dict[str, Any]:
+    session = _sessions(request).latest_open(paperless_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+    return session
 
 
 @router.post("/sessions")
@@ -148,6 +157,9 @@ def create_session(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _sessions(request)[session["id"]] = session
+    paperless_id = session.get("paperless_doc_id")
+    if paperless_id is not None:
+        _sessions(request).drop_other_open(int(paperless_id), session["id"])
     return session
 
 
@@ -189,6 +201,7 @@ def patch_match(
     row.update({k: v for k, v in data.items() if v is not None or k in nullable})
     matches[index] = row
     session["matches"] = matches
+    _sessions(request).save(session)
     return session
 
 
@@ -219,4 +232,5 @@ def commit(
             except PaperlessError as exc:
                 result["paperless"] = {"updated": False, "error": str(exc)}
         session["committed"] = True
+    _sessions(request).save(session)
     return result

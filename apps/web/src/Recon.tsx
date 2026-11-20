@@ -401,6 +401,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const [error, setError] = useState<string | null>(null);
   const [pickedAccount, setPickedAccount] = useState(accountId ?? 0);
   const [session, setSession] = useState<ReconSession | null>(null);
+  const [resumed, setResumed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -427,8 +428,20 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     setSelectedIdx(null);
     setError(null);
     setPreview(null);
+    setResumed(false);
     if (docId == null) return;
     let cancelled = false;
+    void api
+      .get<ReconSession>(`/api/recon/sessions/open?paperless_id=${docId}`)
+      .then((saved) => {
+        if (cancelled || openDocRef.current !== docId) return;
+        if (saved.paperless_doc_id !== docId || saved.committed) return;
+        setSession(saved);
+        setResumed(true);
+        const firstTodo = saved.matches.findIndex((m) => !m.selected_trans_id);
+        setSelectedIdx(firstTodo >= 0 ? firstTodo : 0);
+      })
+      .catch(() => undefined);
     void api
       .get<StatementPreview>(`/api/recon/documents/${docId}/preview`)
       .then((p) => {
@@ -461,6 +474,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     setError(null);
     setResult(null);
     setSelectedIdx(null);
+    setResumed(false);
     const opened = docId;
     try {
       const created = await api.post<ReconSession>("/api/recon/sessions", {
@@ -680,6 +694,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
               <strong>{activeSession.statement.bank_name}</strong> — {activeSession.account_name} · {activeSession.matches.length}{" "}
               {t("matching")}
             </p>
+            {resumed ? <p className="due-job">{t("reconResumed")}</p> : null}
             <ul className="status-counts">
               {Object.entries(statusCounts).map(([st, n]) => (
                 <li key={st}>

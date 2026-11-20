@@ -20,6 +20,7 @@ from mmex_web_api.config import Settings, load_settings
 from mmex_web_api.db import make_engine
 from mmex_web_api.due_job import record_due_job
 from mmex_web_api.lock import WriterLock
+from mmex_web_api.session_store import SessionStore
 from mmex_web_api.routes_ledger import router as ledger_router
 from mmex_web_api.routes_managers import router as managers_router
 from mmex_web_api.routes_attachments import router as attachments_router
@@ -36,7 +37,7 @@ from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
 from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.16.12"
+APP_VERSION = "1.16.13"
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +47,7 @@ class AppState:
         self.lock = WriterLock(settings.lock_path, settings.mmex_lock_holder)
         self.last_backup: Path | None = None
         self.engine: Engine | None = None
-        self.recon_sessions: dict[str, dict[str, Any]] = {}
+        self.recon_sessions = SessionStore(settings.mmex_data_dir / "recon-sessions.json")
         self.due_job: dict[str, Any] | None = None
 
 
