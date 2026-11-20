@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
@@ -36,7 +36,7 @@ from mmex_web_api.routes_quickadd import router as quickadd_router
 from mmex_web_api.routes_transactions import router as transactions_router
 from mmex_web_api.routes_recon import router as recon_router
 
-APP_VERSION = "1.16.10"
+APP_VERSION = "1.16.11"
 logger = logging.getLogger(__name__)
 
 
@@ -173,6 +173,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         @app.get("/{full_path:path}")
         def spa(full_path: str) -> FileResponse:
+            if full_path == "api" or full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not found")
             candidate = (static_dir / full_path).resolve()
             if (
                 full_path

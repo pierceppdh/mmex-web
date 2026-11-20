@@ -20,7 +20,7 @@ from mmex_recon.matcher import load_candidates, match_all, supplement_foreign_am
 from mmex_recon.parsers.registry import registry
 from mmex_recon.schemas import MatchStatus, ParsedStatement, ReconciliationSession, TransactionMatch
 from mmex_web_api.config import Settings
-from mmex_web_api.inbox_cache import _MISS, cache_path, lookup, store
+from mmex_web_api.inbox_cache import _MISS, cache_path, inbox_fingerprint, lookup, store
 from mmex_web_api.paperless import download_document
 
 logger = logging.getLogger(__name__)
@@ -56,14 +56,14 @@ def suggest_inbox_account_id(
     """Same PDF match as opening recon; filename only if parse fails.
 
     A Paperless checksum skips the download when this document was already mapped.
+    The list API often omits the checksum; the document id is then enough.
     """
-    fingerprint = str(doc.get("checksum") or "").strip()
+    fingerprint = inbox_fingerprint(doc)
     path = cache_path(settings.mmex_data_dir)
     doc_id = int(doc["id"])
-    if fingerprint:
-        cached = lookup(path, doc_id, fingerprint)
-        if cached is not _MISS:
-            return cached if cached is None else int(cached)
+    cached = lookup(path, doc_id, fingerprint)
+    if cached is not _MISS:
+        return cached if cached is None else int(cached)
     name = str(doc.get("original_file_name") or doc.get("title") or f"doc-{doc_id}.pdf")
     account_id: int | None = None
     try:
@@ -76,8 +76,7 @@ def suggest_inbox_account_id(
         logger.info("inbox parse for paperless %s: %s", doc_id, exc)
     if account_id is None:
         account_id = suggest_account_id(inbox_haystack(doc), accounts)
-    if fingerprint:
-        store(path, doc_id, fingerprint, account_id)
+    store(path, doc_id, fingerprint, account_id)
     return account_id
 
 

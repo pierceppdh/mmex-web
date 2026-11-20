@@ -67,6 +67,8 @@ def list_inbox_documents(settings: Settings) -> list[dict[str, Any]]:
                     "created": created[:10],
                     "original_file_name": item.get("original_file_name") or "",
                     "checksum": str(item.get("checksum") or ""),
+                    "modified": str(item.get("modified") or ""),
+                    "added": str(item.get("added") or ""),
                     "correspondent": correspondent,
                     "tags": tag_names,
                 }

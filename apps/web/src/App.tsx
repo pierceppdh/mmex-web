@@ -1,11 +1,10 @@
-import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Children, isValidElement, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dashboard } from "./Dashboard";
 import { Register } from "./Register";
 import { Managers } from "./Managers";
 import { Fields } from "./Fields";
 import { Scheduled } from "./Scheduled";
 import { Budgets } from "./Budgets";
-import { Reports } from "./Reports";
 import { Stocks } from "./Stocks";
 import { Assets } from "./Assets";
 import { Tools } from "./Tools";
@@ -28,6 +27,7 @@ import type {
   View,
 } from "./types";
 
+const Reports = lazy(() => import("./Reports").then((m) => ({ default: m.Reports })));
 const MANAGERS: ManagerId[] = ["payees", "categories", "tags", "currencies", "fields"];
 const MANAGER_ICON: Record<ManagerId, string> = {
   payees: "person",
@@ -213,34 +213,33 @@ export default function App() {
     writeLocale(next);
   };
 
+  const loadInbox = useCallback(() => {
+    void api
+      .get<ReconInbox>("/api/recon/inbox")
+      .then(setReconInbox)
+      .catch(() => setReconInbox(null));
+  }, []);
+
   const loadLedger = useCallback(async () => {
-    const [h, d] = await Promise.all([
+    const [h, d, prefs] = await Promise.all([
       api.get<Health>("/api/health"),
       api.get<DashboardData>("/api/dashboard").catch((err: Error & { status?: number }) => {
         if (err.status === 401 || err.status === 409 || err.status === 503) return null;
         throw err;
       }),
+      api
+        .get<{ theme: ThemePref; show_closed_accounts: boolean }>("/api/settings")
+        .catch(() => null),
     ]);
     setHealth(h);
     setDash(d);
-    try {
-      const inbox = await api.get<ReconInbox>("/api/recon/inbox");
-      setReconInbox(inbox);
-    } catch {
-      setReconInbox(null);
-    }
-    try {
-      const prefs = await api.get<{
-        theme: ThemePref;
-        show_closed_accounts: boolean;
-      }>("/api/settings");
+    if (prefs) {
       setShowClosed(prefs.show_closed_accounts);
       setTheme(prefs.theme);
       writeTheme(prefs.theme);
-    } catch {
-      /* schema or ledger not ready */
     }
-  }, []);
+    loadInbox();
+  }, [loadInbox]);
 
   useEffect(() => {
     if (booting) return;
@@ -755,7 +754,11 @@ export default function App() {
           />
         )}
         {view.kind === "budgets" && <Budgets locale={locale} t={t} />}
-        {view.kind === "reports" && <Reports locale={locale} t={t} />}
+        {view.kind === "reports" && (
+          <Suspense fallback={<p className="k">{t("loading")}</p>}>
+            <Reports locale={locale} t={t} />
+          </Suspense>
+        )}
         {view.kind === "stocks" && <Stocks t={t} onChanged={() => void loadLedger()} />}
         {view.kind === "assets" && <Assets t={t} />}
         {(view.kind === "recon" || view.kind === "reconDoc") && dash && (

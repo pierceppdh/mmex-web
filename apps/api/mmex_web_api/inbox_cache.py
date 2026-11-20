@@ -11,6 +11,24 @@ _MISS = object()
 _lock = Lock()
 
 
+def inbox_fingerprint(doc: dict) -> str:
+    """Identity of a Paperless document for the suggestion cache.
+
+    The list endpoint often returns an empty checksum. Fall back to the
+    modified time, then to the document id, so a repeat inbox load does not
+    download the PDF again.
+    """
+    doc_id = int(doc["id"])
+    checksum = str(doc.get("checksum") or "").strip()
+    if checksum:
+        return f"sha:{checksum}"
+    modified = str(doc.get("modified") or doc.get("added") or "").strip()
+    name = str(doc.get("original_file_name") or "")
+    if modified:
+        return f"mod:{doc_id}:{modified}:{name}"
+    return f"id:{doc_id}:{name}"
+
+
 def cache_path(data_dir: Path) -> Path:
     return data_dir / "recon-inbox-cache.json"
 

@@ -311,3 +311,36 @@ def test_inbox_suggestion_cached_by_checksum(tmp_path, monkeypatch) -> None:
     changed = {**doc, "checksum": "def"}
     assert recon_pipeline.suggest_inbox_account_id(settings, changed, accounts) == 1
     assert calls["n"] == 2
+
+
+def test_inbox_suggestion_cached_without_checksum(tmp_path, monkeypatch) -> None:
+    settings = Settings(
+        mmex_data_dir=tmp_path,
+        mmex_db_path=tmp_path / "data.mmb",
+        _env_file=None,
+    )
+    calls = {"n": 0}
+
+    def fail_download(*_a, **_k):
+        calls["n"] += 1
+        raise RuntimeError("no pdf")
+
+    monkeypatch.setattr(recon_pipeline, "download_document", fail_download)
+    accounts = [
+        {
+            "account_id": 1,
+            "name": "Boursorama",
+            "account_num": "FR76123456789012",
+            "status": "Open",
+        }
+    ]
+    doc = {
+        "id": 9,
+        "title": "Releve FR76123456789012",
+        "original_file_name": "releve.pdf",
+        "checksum": "",
+        "tags": [],
+    }
+    assert recon_pipeline.suggest_inbox_account_id(settings, doc, accounts) == 1
+    assert recon_pipeline.suggest_inbox_account_id(settings, doc, accounts) == 1
+    assert calls["n"] == 1

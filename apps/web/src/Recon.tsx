@@ -47,6 +47,7 @@ type ReconSession = {
   id: string;
   account_id: number;
   account_name: string;
+  paperless_doc_id?: number | null;
   suggested_account_id?: number | null;
   statement: {
     bank_name: string;
@@ -408,6 +409,9 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
   const [preview, setPreview] = useState<StatementPreview | null>(null);
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const gridRef = useRef<HTMLDivElement>(null);
+  const openDocRef = useRef(docId);
+
+  openDocRef.current = docId;
 
   useEffect(() => {
     void api
@@ -417,6 +421,27 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     void api.get<{ categories: Category[] }>("/api/categories").then((r) => setCategories(r.categories));
   }, []);
 
+  useEffect(() => {
+    setSession(null);
+    setResult(null);
+    setSelectedIdx(null);
+    setError(null);
+    setPreview(null);
+    if (docId == null) return;
+    let cancelled = false;
+    void api
+      .get<StatementPreview>(`/api/recon/documents/${docId}/preview`)
+      .then((p) => {
+        if (cancelled || openDocRef.current !== docId) return;
+        setPreview(p);
+        if (p.suggested_account_id) setPickedAccount(p.suggested_account_id);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [docId]);
+
   const nameById = Object.fromEntries(accounts.map((a) => [a.account_id, a.name]));
   const selected = docId != null ? inbox?.documents.find((d) => d.id === docId) : undefined;
   const openAccounts = accounts.filter((a) => a.status !== "Closed");
@@ -425,18 +450,6 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     if (selected?.account_id) setPickedAccount(selected.account_id);
     else if (accountId) setPickedAccount(accountId);
   }, [selected?.account_id, accountId]);
-
-  useEffect(() => {
-    if (docId == null) return;
-    setPreview(null);
-    void api
-      .get<StatementPreview>(`/api/recon/documents/${docId}/preview`)
-      .then((p) => {
-        setPreview(p);
-        if (p.suggested_account_id) setPickedAccount(p.suggested_account_id);
-      })
-      .catch(() => undefined);
-  }, [docId]);
 
   async function runMatch() {
     if (!selected) return;
@@ -448,11 +461,13 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     setError(null);
     setResult(null);
     setSelectedIdx(null);
+    const opened = docId;
     try {
       const created = await api.post<ReconSession>("/api/recon/sessions", {
         paperless_id: selected.id,
         account_id: pickedAccount,
       });
+      if (openDocRef.current !== opened) return;
       setSession(created);
       if (created.suggested_account_id) setPickedAccount(created.suggested_account_id);
       const firstTodo = created.matches.findIndex((m) => !m.selected_trans_id);
@@ -551,7 +566,8 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
     return { bank, mmex };
   }, [session]);
   const stmt = session?.statement;
-  const previewCard = preview || stmt;
+  const activeSession = session && session.paperless_doc_id === docId ? session : null;
+  const previewCard = preview || (activeSession ? stmt : null);
 
   if (docId != null) {
     return (
@@ -567,7 +583,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
         {result && <p className="recon-flash ok">{result}</p>}
         {!inbox && !error && <p className="k">{t("loading")}</p>}
         {inbox && !selected && <p className="error-text">{t("reconMissingDoc")}</p>}
-        {selected && !session && (
+        {selected && !activeSession && (
           <article className="recon-preview">
             <h3>{t("reconPreview")}</h3>
             {previewCard && (
@@ -658,10 +674,10 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
             </div>
           </article>
         )}
-        {session && (
+        {activeSession && (
           <>
             <p className="k">
-              <strong>{session.statement.bank_name}</strong> — {session.account_name} · {session.matches.length}{" "}
+              <strong>{activeSession.statement.bank_name}</strong> — {activeSession.account_name} · {activeSession.matches.length}{" "}
               {t("matching")}
             </p>
             <ul className="status-counts">
@@ -782,7 +798,7 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
                                 idx={idx}
                                 t={t}
                                 openAccounts={openAccounts}
-                                sessionAccountId={session.account_id}
+                                sessionAccountId={activeSession.account_id}
                                 categories={categories}
                                 patchRow={patchRow}
                               />
@@ -798,23 +814,23 @@ export function Recon({ t, accounts, accountId, docId, onOpen, onBack, onCommitt
             </div>
             <div className="review-footer">
               <div className="footer-balance">
-                {session.balance_check && (
+                {activeSession.balance_check && (
                   <span
-                    className={`recon-balance-flag recon-balance-${session.balance_check.status.toLowerCase()}`}
+                    className={`recon-balance-flag recon-balance-${activeSession.balance_check.status.toLowerCase()}`}
                   >
-                    {t("reconPdfBalance")}: {session.balance_check.status}
-                    {session.balance_check.opening_balance_pdf != null &&
-                    session.balance_check.closing_balance_pdf != null
-                      ? ` · ${session.balance_check.opening_balance_pdf} + mvt → ${session.balance_check.computed_closing ?? "—"} / ${session.balance_check.closing_balance_pdf}`
+                    {t("reconPdfBalance")}: {activeSession.balance_check.status}
+                    {activeSession.balance_check.opening_balance_pdf != null &&
+                    activeSession.balance_check.closing_balance_pdf != null
+                      ? ` · ${activeSession.balance_check.opening_balance_pdf} + mvt → ${activeSession.balance_check.computed_closing ?? "—"} / ${activeSession.balance_check.closing_balance_pdf}`
                       : ""}
-                    {session.balance_check.difference_pdf
-                      ? ` (Δ ${session.balance_check.difference_pdf})`
+                    {activeSession.balance_check.difference_pdf
+                      ? ` (Δ ${activeSession.balance_check.difference_pdf})`
                       : ""}
-                    {session.balance_check.message ? ` — ${session.balance_check.message}` : ""}
+                    {activeSession.balance_check.message ? ` — ${activeSession.balance_check.message}` : ""}
                   </span>
                 )}
                 <span>
-                  {includedCount} {t("reconIncluded")} / {session.matches.length}
+                  {includedCount} {t("reconIncluded")} / {activeSession.matches.length}
                   {" · "}
                   {t("reconIncludedBank")}: {includedSums.bank.toFixed(2)}
                   {" · "}
